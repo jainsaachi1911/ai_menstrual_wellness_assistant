@@ -116,7 +116,7 @@ export default function Navbar({ isOpen: controlledIsOpen, handleToggle: control
       </div>
 
       <div className="navbar-brand">
-        <span className="brand-text">Wellness</span>
+        <span className="brand-text">LUNARA</span>
       </div>
 
       <ul className="nav-list">

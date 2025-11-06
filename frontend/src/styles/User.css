@@ -503,8 +503,8 @@
 }
 
 .modal-header h3 {
-  margin: 0;
-  font-size: 20px;
+  margin: 20px 30px 0px ;
+  font-size: 30px;
   font-weight: 700;
   color: var(--text-primary);
   background: linear-gradient(135deg, var(--pastel-purple), var(--pastel-pink));
@@ -658,7 +658,7 @@
 }
 
 .modal-content {
-  padding: 25px 35px 35px;
+  padding: 0px 35px 35px;
   overflow-y: auto;
   font-family: 'Times New Roman', Times, serif;
 }

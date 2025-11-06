@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Donau&display=swap');
 :root {
   --nav-pastel-purple: #b8a3ff;
   --nav-pastel-pink: #ffaac5;
@@ -262,7 +263,7 @@
 
 /* Logo/Brand area */
 .navbar-brand {
-  padding: 0 20px 20px;
+  padding: 0px 50px 15px 15px;
   border-bottom: 2px solid var(--nav-gray-light);
   margin: 0 8px 20px;
   transition: all 0.35s ease;
@@ -279,18 +280,18 @@
 }
 
 .brand-text {
-  font-size: 28px;
-  font-weight: 700;
-  background: linear-gradient(135deg, var(--nav-pastel-purple), var(--nav-pastel-pink));
+  font-size: 25px;
+  font-weight: 1000;
+  background: linear-gradient(135deg, #f30e0e, #ff7a7a); /* reddish gradient */
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
   white-space: nowrap;
   transition: opacity 0.35s ease, transform 0.35s ease;
-  font-family: 'Times New Roman', Times, serif;
+  font-family: 'Donau';
   text-align: center;
   display: block;
-  letter-spacing: 1.2px;
+  letter-spacing: 0.8px;
 }
 
 .sidebar-navbar.closed .brand-text {
