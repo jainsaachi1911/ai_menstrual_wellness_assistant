@@ -54,20 +54,6 @@ export default function Navbar({ isOpen: controlledIsOpen, handleToggle: control
         </li>
 
         <li>
-          <Link to="/login" title="Login">
-            <LogIn size={18} />
-            <span className="nav-text">Login</span>
-          </Link>
-        </li>
-
-        <li>
-          <Link to="/signup" title="Signup">
-            <UserPlus size={18} />
-            <span className="nav-text">Signup</span>
-          </Link>
-        </li>
-
-        <li>
           <Link to="/user" title="User">
             <User size={18} />
             <span className="nav-text">User</span>

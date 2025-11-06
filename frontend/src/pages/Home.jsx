@@ -23,9 +23,7 @@ const Home = () => {
 
   return (
     <div>
-      <h1>Home Page</h1>
-      {/* Optional: show AnalysisForm on Home after auth */}
-      <AnalysisForm />
+      
     </div>
   );
 };

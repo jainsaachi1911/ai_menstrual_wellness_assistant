@@ -429,8 +429,8 @@ const AnalysisForm = () => {
   }
 
   return (
-    <div className="analysis-form-container" style={{ maxWidth: 980, margin: '0 auto', padding: 16 }}>
-      <div className="period-tracker" style={{ padding: 12, border: '1px solid #eee', borderRadius: 8, background: 'white' }}>
+    <div className="analysis-form-container" style={{ maxWidth: 980, margin: '0 auto', padding: 30 ,borderRadius: 25}}>
+      <div className="period-tracker" style={{ padding: 32, border: '1px solid #eee', borderRadius: 8, background: 'white' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
           <button type="button" onClick={() => changeMonth(-1)}>&lt;</button>
           <div style={{ fontSize: 18, fontWeight: 700 }}>{currentDate.toLocaleString(undefined, { month: 'long', year: 'numeric' })}</div>
