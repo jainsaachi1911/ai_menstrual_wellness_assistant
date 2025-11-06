@@ -1,6 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { auth } from '../services/firebase';
 import { addCycle, addAnalysis, getCycles } from '../services/firestore';
+import { 
+  Activity, 
+  Brain, 
+  Zap, 
+  Heart, 
+  Wind, 
+  Droplet,
+  ArrowDown,
+  Sparkles,
+  Coffee,
+  Minus,
+  Plus,
+  ChevronLeft,
+  ChevronRight
+} from 'lucide-react';
 import '../styles/AnalysisForm.css';
 
 // Helper to calculate difference in days between two ISO date strings or Date objects
@@ -65,6 +80,17 @@ const AnalysisForm = () => {
   const [tempStart, setTempStart] = useState('');
   const [tempEnd, setTempEnd] = useState('');
   const [tempIntensity, setTempIntensity] = useState('');
+  const [symptoms, setSymptoms] = useState({
+    cramps: 0,        // 0-5 intensity
+    headache: false,  // toggle
+    fatigue: 0,       // 0-5 intensity
+    mood: 0,          // 0-3 rating
+    bloating: false,  // toggle
+    nausea: false,    // toggle
+    backPain: 0,      // 0-5 intensity
+    acne: false,      // toggle
+    cravings: 0       // 0-3 rating
+  });
 
   const [formData, setFormData] = useState({
     AvgCycleLength: '',
@@ -171,6 +197,27 @@ const AnalysisForm = () => {
     setCyclesMap(prev => { const copy = { ...prev }; delete copy[key]; return copy; });
     setTempStart(''); setTempEnd(''); setTempIntensity('');
     setTimeout(buildCyclesFromMap, 0);
+  };
+
+  const toggleSymptom = (symptom) => {
+    setSymptoms(prev => ({
+      ...prev,
+      [symptom]: !prev[symptom]
+    }));
+  };
+
+  const setSymptomIntensity = (symptom, value) => {
+    setSymptoms(prev => ({
+      ...prev,
+      [symptom]: value
+    }));
+  };
+
+  const adjustSymptomIntensity = (symptom, delta) => {
+    setSymptoms(prev => ({
+      ...prev,
+      [symptom]: Math.max(0, Math.min(5, prev[symptom] + delta))
+    }));
   };
 
   const handleDayClick = (iso) => {
@@ -429,12 +476,21 @@ const AnalysisForm = () => {
   }
 
   return (
-    <div className="analysis-form-container" style={{ maxWidth: 980, margin: '0 auto', padding: 30 ,borderRadius: 25}}>
-      <div className="period-tracker" style={{ padding: 32, border: '1px solid #eee', borderRadius: 8, background: 'white' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-          <button type="button" onClick={() => changeMonth(-1)}>&lt;</button>
-          <div style={{ fontSize: 18, fontWeight: 700 }}>{currentDate.toLocaleString(undefined, { month: 'long', year: 'numeric' })}</div>
-          <button type="button" onClick={() => changeMonth(1)}>&gt;</button>
+    <div className="analysis-form-container">
+      {/* Welcoming Header */}
+      <div className="calendar-header">
+        <h2>Your Wellness Journey</h2>
+      </div>
+
+      <div className="period-tracker">
+        <div className="calendar-nav">
+          <button type="button" className="nav-arrow" onClick={() => changeMonth(-1)}>
+            <ChevronLeft size={24} />
+          </button>
+          <h3 className="calendar-month">{currentDate.toLocaleString(undefined, { month: 'long', year: 'numeric' })}</h3>
+          <button type="button" className="nav-arrow" onClick={() => changeMonth(1)}>
+            <ChevronRight size={24} />
+          </button>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 6 }}>
@@ -470,13 +526,9 @@ const AnalysisForm = () => {
           ))}
         </div>
 
-        <div style={{ marginTop: 12, display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-
-
-
-          <button type="button" onClick={saveCurrentMonth}>Save Month</button>
+        <div className="calendar-actions">
           <button type="button" onClick={clearCurrentMonth}>Clear Month</button>
-          <button type="button" onClick={computeMetrics}>Calculate Metrics</button>
+          <button type="button" onClick={saveCurrentMonth}>Save Month</button>
         </div>
 
         {/* <div style={{ marginTop: 16 }}>
@@ -487,18 +539,56 @@ const AnalysisForm = () => {
               <strong>{k}</strong>
               <div>Start: {v.start || '-'}</div>
               <div>End: {v.end || '-'}</div>
-              <div>Intensity: {v.intensity || '-'}</div>
-              <button type="button" onClick={() => { const [y, mo] = k.split('-').map(Number); setCurrentDate(new Date(y, mo - 1, 1)); }}>Edit</button>
-              <button type="button" onClick={() => { setCyclesMap(prev => { const copy = { ...prev }; delete copy[k]; return copy; }); setTimeout(buildCyclesFromMap, 0); }}>Remove</button>
-            </div>
-          ))}
-        </div>*/}
       </div>
 
-      {/* Symptoms / Intensity Card */}
-      <div className="period-intensity-card" style={{ background: 'white', border: '1px solid #eee', borderRadius: 8, padding: 16, marginTop: 16 }}>
-        <h4>Symptoms</h4>
-        <div className="intensity-selector" style={{ marginTop: 8 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 6 }}>
+        {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d => (
+          <div key={d} style={{ textAlign: 'center', fontWeight: 700 }}>{d}</div>
+        ))}
+
+        {cells.map((c, idx) => (
+          <div
+            key={idx}
+            onClick={() => handleDayClick(c.iso)}
+            role="button"
+            tabIndex={0}
+            style={{
+              minHeight: 70,
+              border: '1px solid #ddd',
+              borderRadius: 6,
+              padding: 6,
+              background: c.isStart ? '#e6f4ff' : c.isEnd ? '#fff0f0' : c.inRange ? '#f0f8ff' : (c.inCurrentMonth ? 'white' : '#fafafa'),
+              color: c.inCurrentMonth ? 'inherit' : '#999',
+              cursor: 'pointer',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'space-between'
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <div style={{ fontWeight: 600 }}>{c.day}</div>
+              {c.isStart && <div style={{ fontSize: 11, padding: '2px 6px', borderRadius: 10, background: '#2b6cb0', color: 'white' }}>Start</div>}
+              {c.isEnd && <div style={{ fontSize: 11, padding: '2px 6px', borderRadius: 10, background: '#e53e3e', color: 'white' }}>End</div>}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="calendar-actions">
+        <button type="button" onClick={saveCurrentMonth}>Save Month</button>
+        <button type="button" onClick={clearCurrentMonth}>Clear Month</button>
+        <button type="button" onClick={computeMetrics}>Calculate Metrics</button>
+      </div>
+    </div>
+
+    {/* Symptoms Tracker */}
+    <div className="symptoms-card">
+      <h4>How did you feel this month?</h4>
+      
+      {/* Bleeding Intensity */}
+      <div className="symptom-section">
+        <h5>Flow Intensity</h5>
+        <div className="intensity-selector">
           {[1,2,3,4,5].map(lv => (
             <div
               key={lv}
@@ -511,9 +601,216 @@ const AnalysisForm = () => {
           ))}
         </div>
       </div>
+      
+      {/* Intensity-based symptoms with slider */}
+      <div className="symptom-section">
+        <h5>Intensity Symptoms</h5>
+        <div className="symptoms-intensity-grid">
+          {/* Cramps Intensity */}
+          <div className="symptom-intensity-item">
+              <div className="symptom-header">
+                <Activity size={20} className="symptom-icon" />
+                <span className="symptom-label">Cramps</span>
+              </div>
+              <div className="intensity-controls">
+                <button 
+                  type="button"
+                  className="intensity-btn"
+                  onClick={() => adjustSymptomIntensity('cramps', -1)}
+                  disabled={symptoms.cramps === 0}
+                >
+                  <Minus size={14} />
+                </button>
+                <div className="intensity-bar">
+                  {[1, 2, 3, 4, 5].map(level => (
+                    <div 
+                      key={level}
+                      className={`intensity-level ${symptoms.cramps >= level ? 'active' : ''}`}
+                      data-symptom="cramps"
+                      onClick={() => setSymptomIntensity('cramps', level)}
+                    />
+                  ))}
+                </div>
+                <button 
+                  type="button"
+                  className="intensity-btn"
+                  onClick={() => adjustSymptomIntensity('cramps', 1)}
+                  disabled={symptoms.cramps === 5}
+                >
+                  <Plus size={14} />
+                </button>
+              </div>
+            </div>
 
-      <form onSubmit={handleSubmit} className="analysis-form" style={{ marginTop: 16 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 12 }}>
+          {/* Fatigue Intensity */}
+          <div className="symptom-intensity-item">
+              <div className="symptom-header">
+                <Zap size={20} className="symptom-icon" />
+                <span className="symptom-label">Fatigue</span>
+              </div>
+              <div className="intensity-controls">
+                <button 
+                  type="button"
+                  className="intensity-btn"
+                  onClick={() => adjustSymptomIntensity('fatigue', -1)}
+                  disabled={symptoms.fatigue === 0}
+                >
+                  <Minus size={14} />
+                </button>
+                <div className="intensity-bar">
+                  {[1, 2, 3, 4, 5].map(level => (
+                    <div 
+                      key={level}
+                      className={`intensity-level ${symptoms.fatigue >= level ? 'active' : ''}`}
+                      data-symptom="fatigue"
+                      onClick={() => setSymptomIntensity('fatigue', level)}
+                    />
+                  ))}
+                </div>
+                <button 
+                  type="button"
+                  className="intensity-btn"
+                  onClick={() => adjustSymptomIntensity('fatigue', 1)}
+                  disabled={symptoms.fatigue === 5}
+                >
+                  <Plus size={14} />
+                </button>
+              </div>
+            </div>
+
+          {/* Back Pain Intensity */}
+          <div className="symptom-intensity-item">
+              <div className="symptom-header">
+                <ArrowDown size={20} className="symptom-icon" />
+                <span className="symptom-label">Back Pain</span>
+              </div>
+              <div className="intensity-controls">
+                <button 
+                  type="button"
+                  className="intensity-btn"
+                  onClick={() => adjustSymptomIntensity('backPain', -1)}
+                  disabled={symptoms.backPain === 0}
+                >
+                  <Minus size={14} />
+                </button>
+                <div className="intensity-bar">
+                  {[1, 2, 3, 4, 5].map(level => (
+                    <div 
+                      key={level}
+                      className={`intensity-level ${symptoms.backPain >= level ? 'active' : ''}`}
+                      data-symptom="backPain"
+                      onClick={() => setSymptomIntensity('backPain', level)}
+                    />
+                  ))}
+                </div>
+                <button 
+                  type="button"
+                  className="intensity-btn"
+                  onClick={() => adjustSymptomIntensity('backPain', 1)}
+                  disabled={symptoms.backPain === 5}
+                >
+                  <Plus size={14} />
+                </button>
+              </div>
+            </div>
+        </div>
+      </div>
+
+      {/* Toggle symptoms */}
+      <div className="symptom-section">
+          <h5>Yes/No Symptoms</h5>
+          <div className="symptoms-toggle-grid">
+            <div 
+              className={`symptom-toggle ${symptoms.headache ? 'active' : ''}`}
+              onClick={() => toggleSymptom('headache')}
+              data-symptom="headache"
+            >
+              <Brain size={22} />
+              <span>Headache</span>
+            </div>
+            
+            <div 
+              className={`symptom-toggle ${symptoms.bloating ? 'active' : ''}`}
+              onClick={() => toggleSymptom('bloating')}
+              data-symptom="bloating"
+            >
+              <Wind size={22} />
+              <span>Bloating</span>
+            </div>
+            
+            <div 
+              className={`symptom-toggle ${symptoms.nausea ? 'active' : ''}`}
+              onClick={() => toggleSymptom('nausea')}
+              data-symptom="nausea"
+            >
+              <Droplet size={22} />
+              <span>Nausea</span>
+            </div>
+            
+            <div 
+              className={`symptom-toggle ${symptoms.acne ? 'active' : ''}`}
+              onClick={() => toggleSymptom('acne')}
+              data-symptom="acne"
+            >
+              <Sparkles size={22} />
+              <span>Acne</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Rating symptoms */}
+      <div className="symptom-section">
+          <h5>Rate Severity</h5>
+          <div className="symptoms-rating-grid">
+            {/* Mood Swings Rating */}
+            <div className="symptom-rating-item">
+              <div className="symptom-header">
+                <Heart size={20} className="symptom-icon" />
+                <span className="symptom-label">Mood Swings</span>
+              </div>
+              <div className="rating-dots">
+                {[1, 2, 3].map(level => (
+                  <div
+                    key={level}
+                    className={`rating-dot ${symptoms.mood >= level ? 'active' : ''}`}
+                    data-symptom="mood"
+                    onClick={() => setSymptomIntensity('mood', symptoms.mood === level ? 0 : level)}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {/* Cravings Rating */}
+            <div className="symptom-rating-item">
+              <div className="symptom-header">
+                <Coffee size={20} className="symptom-icon" />
+                <span className="symptom-label">Cravings</span>
+              </div>
+              <div className="rating-dots">
+                {[1, 2, 3].map(level => (
+                  <div
+                    key={level}
+                    className={`rating-dot ${symptoms.cravings >= level ? 'active' : ''}`}
+                    data-symptom="cravings"
+                    onClick={() => setSymptomIntensity('cravings', symptoms.cravings === level ? 0 : level)}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Calculate Metrics Button */}
+      <div className="metrics-button-container">
+        <button type="button" className="calculate-metrics-btn" onClick={computeMetrics}>
+          Calculate Metrics
+        </button>
+      </div>
+
+    <form onSubmit={handleSubmit} className="analysis-form">
+        <div>
           <div className="form-group">
             <label htmlFor="AvgCycleLength">Average Cycle Length (days)</label>
             <input type="number" id="AvgCycleLength" name="AvgCycleLength" value={formData.AvgCycleLength} readOnly />
@@ -620,25 +917,25 @@ const AnalysisForm = () => {
           </div>
         </div>
 
-        <div style={{ marginTop: 12 }}>
+        <div>
           <button type="submit" disabled={loading}>{loading ? 'Analyzing...' : 'Analyze Health Data'}</button>
         </div>
-      </form>
+    </form>
 
-      {error && <div className="error-message" style={{ color: 'red', marginTop: 12 }}>{error}</div>}
+    {error && <div className="error-message">{error}</div>}
 
-      {results && (
-        <div className="results-container" style={{ marginTop: 12 }}>
+    {results && (
+      <div className="results-container">
           <h3>Analysis Results</h3>
           {Object.entries(results).map(([key, value]) => (
-            <div key={key} style={{ marginBottom: '1em' }}>
-              <strong>{key.replace('_', ' ').toUpperCase()}</strong>
-              <pre style={{ background: '#f7f7f7', padding: 8, borderRadius: 6 }}>{JSON.stringify(value, null, 2)}</pre>
+            <div key={key}>
+              <strong>{key.replace(/_/g, ' ')}</strong>
+              <pre>{JSON.stringify(value, null, 2)}</pre>
             </div>
           ))}
-        </div>
-      )}
-    </div>
+      </div>
+    )}
+  </div>
   );
 };
 
