@@ -1,16 +1,31 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap');
+
+:root {
+  --color-light-pink: #faeef3;
+  --color-medium-pink: #f48da9;
+  --color-dark-pink: #f25987;
+  --color-white: #ffffff;
+  --color-pale-pink: #fdd1dc;
+  --color-purple: #8f6ef1;
+  --color-orange: #fea85b;
+  --color-gray: #6c6c6c;
+}
+
 .analysis-form-container {
   max-width: 980px;
   margin: 0 auto;
   padding: 20px;
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+  background-color: var(--color-white); /* pale pink background */
+  font-family: "Times New Roman", Times, serif;
 }
 
 .period-tracker {
-  background-color: #ffffff;
-  border-radius: 10px;
-  padding: 16px;
-  margin-bottom: 18px;
-  border: 1px solid #e6e6e6;
+  background-color: var(--color-white); /* white card */
+  border-radius: 16px;
+  padding: 20px;
+  margin-bottom: 24px;
+  border: 1px solid #e5e5e5; /* light grey border */
+  box-shadow: 0 2px 6px rgba(0,0,0,0.05); /* light shadow */
 }
 
 /* Calendar grid (7 columns) */
@@ -43,22 +58,24 @@
 }
 
 .period-tracker .day-cell.outside {
-  background: #fafafa;
-  color: #999;
+  background: var(--color-light-pink);
+  color: var(--color-gray);
 }
 
 .period-tracker .day-cell.start {
-  background: #e6f4ff;
-  border-color: #2b6cb0;
+  background: var(--color-medium-pink);
+  border-color: var(--color-dark-pink);
+  color: var(--color-white);
 }
 
 .period-tracker .day-cell.end {
-  background: #fff0f0;
-  border-color: #e53e3e;
+  background: var(--color-dark-pink);
+  border-color: var(--color-dark-pink);
+  color: var(--color-white);
 }
 
 .period-tracker .day-cell.range {
-  background: #f0f8ff;
+  background: var(--color-pale-pink);
 }
 
 /* small badge for start/end label */
@@ -83,10 +100,11 @@
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
   gap: 20px;
-  background-color: #f5f5f5;
-  padding: 20px;
-  border-radius: 10px;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.03);
+  background-color: #ffffff; /* card white */
+  padding: 24px;
+  border-radius: 12px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+  font-family: "Times New Roman", Times, serif;
 }
 
 /* input groups */
@@ -182,4 +200,28 @@ button[disabled] {
   gap: 12px;
   align-items: center;
   margin-bottom: 8px;
+}
+
+/* Intensity selector */
+.intensity-selector {
+  display: flex;
+  gap: 6px;
+}
+
+.intensity-box {
+  width: 32px;
+  height: 32px;
+  border-radius: 4px;
+  cursor: pointer;
+  border: 2px solid transparent;
+}
+
+.intensity-box.level-1 { background-color: #fde2e2; }
+.intensity-box.level-2 { background-color: #f5b5b5; }
+.intensity-box.level-3 { background-color: #ef8080; }
+.intensity-box.level-4 { background-color: #e44c4c; }
+.intensity-box.level-5 { background-color: #d72626; }
+
+.intensity-box.active {
+  border-color: #333;
 }

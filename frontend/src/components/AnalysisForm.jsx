@@ -1,29 +1,71 @@
 import React, { useState, useEffect } from 'react';
+import { auth } from '../services/firebase';
+import { addCycle, addAnalysis, getCycles } from '../services/firestore';
 import '../styles/AnalysisForm.css';
 
-// Helper to calculate difference in days between two ISO date strings
+// Helper to calculate difference in days between two ISO date strings or Date objects
 const diffInDays = (start, end) => {
   const msPerDay = 1000 * 60 * 60 * 24;
-  const diff = new Date(end) - new Date(start);
+  const a = (start instanceof Date) ? start : new Date(start);
+  const b = (end instanceof Date) ? end : new Date(end);
+  const diff = b - a;
   return Math.round(diff / msPerDay);
 };
 
 const getMonthKey = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 const daysInMonth = (y, m) => new Date(y, m + 1, 0).getDate();
 
+/**
+ * parseOvulationValue:
+ * - Accepts ISO date strings, or numeric strings/integers (1..31).
+ * - For numeric: first tries day-of-month in same month as cycleStart,
+ *   then falls back to day-of-cycle (cycleStart + (n-1) days).
+ * - Returns a Date or null.
+ */
+const parseOvulationValue = (rawOv, cycleStartISO, nextCycleStartISO) => {
+  if (rawOv === undefined || rawOv === null || rawOv === '') return null;
+
+  const cycleStart = new Date(cycleStartISO);
+  const nextStart = nextCycleStartISO ? new Date(nextCycleStartISO) : null;
+
+  // try ISO parse
+  const isoDate = new Date(rawOv);
+  if (Number.isFinite(isoDate.getTime())) {
+    // valid date
+    return isoDate;
+  }
+
+  const asNum = Number(rawOv);
+  if (Number.isFinite(asNum) && asNum >= 1 && asNum <= 31) {
+    // try day-of-month (same month/year as cycleStart)
+    const candidateDOM = new Date(cycleStart.getFullYear(), cycleStart.getMonth(), asNum);
+    if (Number.isFinite(candidateDOM.getTime())) {
+      if (candidateDOM >= cycleStart && (!nextStart || candidateDOM < nextStart)) {
+        return candidateDOM;
+      }
+    }
+
+    // fallback: day-of-cycle (day 1 => cycleStart)
+    const candidateDOC = new Date(cycleStart);
+    candidateDOC.setDate(candidateDOC.getDate() + (asNum - 1));
+    if (candidateDOC >= cycleStart && (!nextStart || candidateDOC < nextStart)) {
+      return candidateDOC;
+    }
+  }
+
+  return null;
+};
+
 const AnalysisForm = () => {
-  // stored cycles keyed by month (YYYY-MM) — each entry { start, end, intensity }
+  // stored cycles keyed by month (YYYY-MM) — each entry { start, end, intensity, ovulation? }
   const [cyclesMap, setCyclesMap] = useState({});
-  // derived sorted cycles array used for metrics
   const [cycles, setCycles] = useState([]);
 
-  // calendar state (visible month + temporary selection for editing)
   const [currentDate, setCurrentDate] = useState(new Date());
   const [tempStart, setTempStart] = useState('');
   const [tempEnd, setTempEnd] = useState('');
   const [tempIntensity, setTempIntensity] = useState('');
 
-  // metrics & form values
   const [formData, setFormData] = useState({
     AvgCycleLength: '',
     AvgCycleLengthPercent: '',
@@ -49,7 +91,6 @@ const AnalysisForm = () => {
   const [results, setResults] = useState(null);
   const [error, setError] = useState(null);
 
-  // when visible month changes, populate temp fields from cyclesMap if present
   useEffect(() => {
     const key = getMonthKey(currentDate);
     const saved = cyclesMap[key];
@@ -64,7 +105,35 @@ const AnalysisForm = () => {
     }
   }, [currentDate, cyclesMap]);
 
-  // build sorted cycles array from cyclesMap
+  // Load cycles from Firestore so calendar persists across visits
+  useEffect(() => {
+    const load = async () => {
+      if (!auth.currentUser) return;
+      try {
+        const list = await getCycles(auth.currentUser.uid);
+        // Build map keyed by YYYY-MM; for overlapping months, last write wins
+        const map = {};
+        for (const c of list) {
+          const startISO = c.startDate?.toDate?.() ? c.startDate.toDate().toISOString().slice(0,10) : c.startDate;
+          const endISO = c.endDate?.toDate?.() ? c.endDate.toDate().toISOString().slice(0,10) : c.endDate;
+          if (!startISO || !endISO) continue;
+          const key = getMonthKey(new Date(startISO));
+          map[key] = {
+            start: startISO,
+            end: endISO,
+            intensity: c.intensity ? String(c.intensity) : (c.avgBleedingIntensity ? String(c.avgBleedingIntensity) : ''),
+          };
+        }
+        setCyclesMap(map);
+        setTimeout(buildCyclesFromMap, 0);
+      } catch (_) {
+        // ignore load errors for now
+      }
+    };
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const buildCyclesFromMap = () => {
     const arr = Object.entries(cyclesMap).map(([month, obj]) => ({ month, ...obj }));
     arr.sort((a, b) => {
@@ -75,12 +144,26 @@ const AnalysisForm = () => {
     return arr;
   };
 
-  // Save currently edited month's selection into cyclesMap
-  const saveCurrentMonth = () => {
+  const saveCurrentMonth = async () => {
     const key = getMonthKey(currentDate);
     setCyclesMap(prev => ({ ...prev, [key]: { start: tempStart, end: tempEnd, intensity: tempIntensity } }));
-    // update derived list
     setTimeout(buildCyclesFromMap, 0);
+    try {
+      if (auth.currentUser && tempStart && tempEnd) {
+        const mensesLengthDays = diffInDays(tempStart, tempEnd) + 1;
+        await addCycle(auth.currentUser.uid, {
+          startDate: new Date(tempStart),
+          endDate: new Date(tempEnd),
+          monthKey: key,
+          intensity: tempIntensity ? Number(tempIntensity) : null,
+          bleedingByDay: null,
+          unusualBleedingByDay: null,
+          mensesLengthDays,
+        });
+      }
+    } catch (e) {
+      // swallow for now; optionally surface a toast
+    }
   };
 
   const clearCurrentMonth = () => {
@@ -90,7 +173,6 @@ const AnalysisForm = () => {
     setTimeout(buildCyclesFromMap, 0);
   };
 
-  // Clicking a day toggles start/end like a simple date-range picker
   const handleDayClick = (iso) => {
     if (!tempStart) {
       setTempStart(iso);
@@ -101,28 +183,24 @@ const AnalysisForm = () => {
       if (new Date(iso) >= new Date(tempStart)) {
         setTempEnd(iso);
       } else {
-        // clicked before start -> make new start
         setTempStart(iso);
         setTempEnd('');
       }
       return;
     }
-    // both set -> start a new selection
     setTempStart(iso);
     setTempEnd('');
   };
 
-  // month navigation
   const changeMonth = (offset) => {
     const d = new Date(currentDate);
     d.setMonth(d.getMonth() + offset);
     setCurrentDate(d);
   };
 
-  // CORE: compute metrics using the requested formulas and robust guarding
+  // MAIN: compute metrics
   const computeMetrics = () => {
     const arr = buildCyclesFromMap();
-    // Consider only months with both start and end defined
     const completed = arr.filter(c => c.start && c.end);
 
     if (completed.length < 2) {
@@ -130,29 +208,28 @@ const AnalysisForm = () => {
       return;
     }
 
-    // --- Cycle lengths between starts (days) ---
+    // Cycle lengths between starts
     const L = [];
     for (let i = 0; i < completed.length - 1; i++) {
       L.push(diffInDays(completed[i].start, completed[i + 1].start));
     }
 
-    // Basic stats: average cycle length
     const avgCycle = L.reduce((a, b) => a + b, 0) / L.length;
+    // mean absolute percent deviation
+    const percentDeviations = L.map(li => (Math.abs(li - avgCycle) / avgCycle) * 100);
+    const avgPercentDeviation = percentDeviations.length > 0
+      ? (percentDeviations.reduce((a, b) => a + b, 0) / percentDeviations.length)
+      : 0;
 
-    // Percent relative to average
-    const P = L.map(li => (li / avgCycle) * 100);
-    const avgPercent = P.reduce((a, b) => a + b, 0) / P.length;
-
-    // --- Standard deviation (sample: divide by n-1) ---
     const stdCycle = L.length > 1
       ? Math.sqrt(L.reduce((sum, li) => sum + Math.pow(li - avgCycle, 2), 0) / (L.length - 1))
       : 0;
 
-    // --- Menses lengths (inclusive: +1) ---
+    // Menses lengths
     const M = completed.map(c => diffInDays(c.start, c.end) + 1);
     const avgMenses = M.reduce((a, b) => a + b, 0) / M.length;
 
-    // --- Luteal & ovulation (assumed luteal used for ovulation estimate) ---
+    // Ovulation day estimate variability based on avgCycle - assumedLuteal
     const assumedLuteal = 14;
     const ovDays = L.map(li => li - assumedLuteal);
     const avgOvDay = ovDays.reduce((a, b) => a + b, 0) / ovDays.length;
@@ -160,36 +237,74 @@ const AnalysisForm = () => {
       ? Math.sqrt(ovDays.reduce((sum, v) => sum + Math.pow(v - avgOvDay, 2), 0) / (ovDays.length - 1))
       : 0;
 
-    // --- Irregular cycles percentage ---
-    // Cycle is irregular if |li - avgCycle| >= irregularThreshold
+    // Irregular cycles percent (threshold in days)
     const irregularThreshold = 7;
     const irregularCount = L.filter(li => Math.abs(li - avgCycle) >= irregularThreshold).length;
     const irregularPercent = L.length > 0 ? (irregularCount / L.length) * 100 : 0;
 
-    // --- Short luteal phase percentage (estimated per-cycle luteal length) ---
-    // We estimate luteal length per cycle as:
-    //    luteal_i = L[i] - follicular_interval_i
-    // where follicular_interval_i = days between end-of-menses for cycle i and next cycle's start.
-    // This yields a per-cycle estimate (more meaningful than assuming a fixed luteal for all cycles).
+    // Build luteal estimates using explicit ovulation where available,
+    // otherwise estimate ovulation using avgCycle - assumedLuteal heuristic.
     const lutealEstimates = [];
-    for (let i = 0; i < completed.length - 1; i++) {
-      const cycleStart = completed[i].start;
-      const cycleEnd = completed[i].end;
-      const nextStart = completed[i + 1].start;
-      const cycleLen = diffInDays(cycleStart, nextStart); // same as L[i]
-      // days after menses end until next period start (approx follicular interval)
-      const follicularInterval = diffInDays(cycleEnd, nextStart);
-      const lutealEstimate = cycleLen - follicularInterval;
-      // Only accept reasonable numeric values
-      if (Number.isFinite(lutealEstimate)) lutealEstimates.push(lutealEstimate);
-    }
-    const shortLutealThreshold = 11;
-    const shortCount = lutealEstimates.filter(l => l < shortLutealThreshold).length;
-    const shortLutealPercent = lutealEstimates.length > 0
-      ? (shortCount / lutealEstimates.length) * 100
-      : 0;
 
-    // --- Bleeding intensity & unusual bleeding ---
+    for (let i = 0; i < completed.length - 1; i++) {
+      const thisCycle = completed[i];
+      const nextCycleStart = completed[i + 1].start; // string ISO
+
+      // 1) If explicit ovulation provided, try to parse and validate it
+      let ovDate = null;
+      if (thisCycle.ovulation !== undefined && thisCycle.ovulation !== null && thisCycle.ovulation !== '') {
+        ovDate = parseOvulationValue(thisCycle.ovulation, thisCycle.start, nextCycleStart);
+        // only accept if valid and before next start
+        if (!ovDate || ovDate >= new Date(nextCycleStart)) {
+          ovDate = null;
+        }
+      }
+
+      // 2) If no explicit ovulation, infer one reasonably:
+      //    estimateOvationOffset = round(avgCycle - assumedLuteal)
+      //    ovDate = cycleStart + estimateOvationOffset days
+      // This lets luteal vary with per-cycle L (final luteal becomes 14 + (li - avgCycle))
+      if (!ovDate) {
+        const estimateOffset = Math.round(avgCycle - assumedLuteal);
+        const candidate = new Date(thisCycle.start);
+        candidate.setDate(candidate.getDate() + estimateOffset);
+        // validation: must be after cycle start and before next start
+        if (candidate > new Date(thisCycle.start) && candidate < new Date(nextCycleStart)) {
+          ovDate = candidate;
+        } else {
+          // if the estimate falls outside, try a safer fallback:
+          // choose middle point between cycle start and next start minus assumedLuteal/2
+          const li = diffInDays(thisCycle.start, nextCycleStart);
+          const fallbackOffset = Math.max(1, Math.round(li - assumedLuteal)); // day-of-cycle style
+          const fallback = new Date(thisCycle.start);
+          fallback.setDate(fallback.getDate() + fallbackOffset);
+          if (fallback > new Date(thisCycle.start) && fallback < new Date(nextCycleStart)) {
+            ovDate = fallback;
+          } else {
+            ovDate = null;
+          }
+        }
+      }
+
+      if (!ovDate) continue;
+
+      const lutealEstimate = diffInDays(ovDate, nextCycleStart);
+      if (Number.isFinite(lutealEstimate) && lutealEstimate >= 7 && lutealEstimate <= 24) {
+        lutealEstimates.push(lutealEstimate);
+      }
+    }
+
+    // Compute short luteal percentage: <= 11 days considered short (inclusive)
+    const shortLutealThreshold = 11;
+    let shortLutealPercent = null;
+    if (lutealEstimates.length > 0) {
+      const shortCount = lutealEstimates.filter(l => l <= shortLutealThreshold).length;
+      shortLutealPercent = (shortCount / lutealEstimates.length) * 100;
+    } else {
+      shortLutealPercent = null; // insufficient data
+    }
+
+    // Bleeding intensity
     const intensityValues = completed
       .map(c => {
         const v = Number(c.intensity);
@@ -211,18 +326,22 @@ const AnalysisForm = () => {
 
     const unusualPercent = completed.length > 0 ? (unusualCount / completed.length) * 100 : 0;
 
-    // Update form data with formatting matching your original code (1 decimal)
+    // Update form fields (1 decimal)
     setFormData(prev => ({
       ...prev,
       AvgCycleLength: Number.isFinite(avgCycle) ? avgCycle.toFixed(1) : '',
-      AvgCycleLengthPercent: Number.isFinite(avgPercent) ? avgPercent.toFixed(1) : '',
+      AvgCycleLengthPercent: Number.isFinite(avgPercentDeviation) ? avgPercentDeviation.toFixed(1) : '',
       StdCycleLength: Number.isFinite(stdCycle) ? stdCycle.toFixed(1) : '',
       AvgMensesLength: Number.isFinite(avgMenses) ? avgMenses.toFixed(1) : '',
       TotalCycles: completed.length,
-      AvgLutealPhase: assumedLuteal,
+      AvgLutealPhase: lutealEstimates.length > 0
+        ? (lutealEstimates.reduce((a, b) => a + b, 0) / lutealEstimates.length).toFixed(1)
+        : assumedLuteal.toFixed(1),
       AvgOvulationDay: Number.isFinite(avgOvDay) ? avgOvDay.toFixed(1) : '',
       IrregularCyclesPercent: Number.isFinite(irregularPercent) ? irregularPercent.toFixed(1) : '',
-      ShortLutealPercent: Number.isFinite(shortLutealPercent) ? shortLutealPercent.toFixed(1) : '',
+      ShortLutealPercent: shortLutealPercent !== null && Number.isFinite(shortLutealPercent)
+        ? shortLutealPercent.toFixed(1)
+        : '', // blank => insufficient luteal/ovulation data
       OvulationVariability: Number.isFinite(ovVar) ? ovVar.toFixed(1) : '',
       AvgBleedingIntensity: avgIntensity > 0 ? avgIntensity.toFixed(1) : '',
       UnusualBleedingPercent: Number.isFinite(unusualPercent) ? unusualPercent.toFixed(1) : ''
@@ -240,7 +359,6 @@ const AnalysisForm = () => {
     setError(null);
 
     try {
-      // send formData plus raw cycles to backend (include derived cycles for transparency)
       const features = { ...formData, cycles: buildCyclesFromMap() };
       const response = await fetch('http://localhost:5002/api/predict', {
         method: 'POST',
@@ -248,7 +366,27 @@ const AnalysisForm = () => {
         body: JSON.stringify({ features })
       });
       const data = await response.json();
-      setResults(data.results || data);
+      const payload = data.results || data;
+      setResults(payload);
+
+      if (auth.currentUser) {
+        try {
+          await addAnalysis(auth.currentUser.uid, {
+            inputFeatures: { ...formData },
+            cyclesSnapshot: buildCyclesFromMap(),
+            modelsRun: ["risk"],
+            riskCategory: payload?.riskCategory || payload?.category || null,
+            riskProbabilities: payload?.riskProbabilities || payload?.probabilities || null,
+            prwiScore: payload?.prwiScore ?? null,
+            clusterLabel: payload?.clusterLabel ?? null,
+            deviationScore: payload?.deviationScore ?? null,
+            recommendations: payload?.recommendations ?? [],
+            confidence: payload?.confidence ?? null,
+          });
+        } catch (e) {
+          // optional: surface a toast
+        }
+      }
     } catch (err) {
       setError('Failed to analyze data. Please try again.');
     } finally {
@@ -256,14 +394,12 @@ const AnalysisForm = () => {
     }
   };
 
-  // calendar grid generation (7 columns x 6 rows = 42 cells)
+  // calendar grid
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
-  const firstWeekday = new Date(year, month, 1).getDay(); // 0=Sun..6=Sat
+  const firstWeekday = new Date(year, month, 1).getDay();
   const totalDays = daysInMonth(year, month);
-
-  // previous month info for leading days
-  const prevMonthLastDay = new Date(year, month, 0); // last day of prev month
+  const prevMonthLastDay = new Date(year, month, 0);
   const prevDays = prevMonthLastDay.getDate();
   const prevYear = prevMonthLastDay.getFullYear();
   const prevMonthIndex = prevMonthLastDay.getMonth();
@@ -273,12 +409,10 @@ const AnalysisForm = () => {
     const dayNum = i - firstWeekday + 1;
     let cellDate, inCurrentMonth;
     if (dayNum <= 0) {
-      // previous month day
       const d = prevDays + dayNum;
       cellDate = new Date(prevYear, prevMonthIndex, d);
       inCurrentMonth = false;
     } else if (dayNum > totalDays) {
-      // next month day
       const d = dayNum - totalDays;
       const next = new Date(year, month + 1, 1);
       cellDate = new Date(next.getFullYear(), next.getMonth(), d);
@@ -296,8 +430,6 @@ const AnalysisForm = () => {
 
   return (
     <div className="analysis-form-container" style={{ maxWidth: 980, margin: '0 auto', padding: 16 }}>
-      <h2 style={{ textAlign: 'center' }}>Menstrual Health Analysis — Monthly Calendar</h2>
-
       <div className="period-tracker" style={{ padding: 12, border: '1px solid #eee', borderRadius: 8, background: 'white' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
           <button type="button" onClick={() => changeMonth(-1)}>&lt;</button>
@@ -339,24 +471,15 @@ const AnalysisForm = () => {
         </div>
 
         <div style={{ marginTop: 12, display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-          <label>Selected Start:
-            <input type="date" value={tempStart} onChange={e => setTempStart(e.target.value)} style={{ marginLeft: 8 }} />
-          </label>
 
-          <label>Selected End:
-            <input type="date" value={tempEnd} onChange={e => setTempEnd(e.target.value)} style={{ marginLeft: 8 }} />
-          </label>
 
-          <label>Intensity (1-5):
-            <input type="number" min="1" max="5" value={tempIntensity} onChange={e => setTempIntensity(e.target.value)} placeholder="1-5" style={{ marginLeft: 8, width: 70 }} />
-          </label>
 
           <button type="button" onClick={saveCurrentMonth}>Save Month</button>
           <button type="button" onClick={clearCurrentMonth}>Clear Month</button>
           <button type="button" onClick={computeMetrics}>Calculate Metrics</button>
         </div>
 
-        <div style={{ marginTop: 16 }}>
+        {/* <div style={{ marginTop: 16 }}>
           <h4>Tracked Months</h4>
           {Object.keys(cyclesMap).length === 0 && <div>No months saved yet.</div>}
           {Object.entries(cyclesMap).map(([k, v]) => (
@@ -369,10 +492,26 @@ const AnalysisForm = () => {
               <button type="button" onClick={() => { setCyclesMap(prev => { const copy = { ...prev }; delete copy[k]; return copy; }); setTimeout(buildCyclesFromMap, 0); }}>Remove</button>
             </div>
           ))}
+        </div>*/}
+      </div>
+
+      {/* Symptoms / Intensity Card */}
+      <div className="period-intensity-card" style={{ background: 'white', border: '1px solid #eee', borderRadius: 8, padding: 16, marginTop: 16 }}>
+        <h4>Symptoms</h4>
+        <div className="intensity-selector" style={{ marginTop: 8 }}>
+          {[1,2,3,4,5].map(lv => (
+            <div
+              key={lv}
+              className={`intensity-box level-${lv} ${Number(tempIntensity)===lv ? 'active' : ''}`}
+              onClick={() => setTempIntensity(String(lv))}
+              role="button"
+              tabIndex={0}
+              onKeyPress={(e)=>{if(e.key==='Enter') setTempIntensity(String(lv));}}
+            />
+          ))}
         </div>
       </div>
 
-      {/* Metrics + demographic form (keeps your original fields & display) */}
       <form onSubmit={handleSubmit} className="analysis-form" style={{ marginTop: 16 }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 12 }}>
           <div className="form-group">
@@ -406,7 +545,7 @@ const AnalysisForm = () => {
           <div className="form-group">
             <label htmlFor="ShortLutealPercent">Short Luteal Phase Percentage</label>
             <input type="number" id="ShortLutealPercent" name="ShortLutealPercent" value={formData.ShortLutealPercent} readOnly />
-            <small>Range: 0-100%</small>
+            <small>Range: 0-100% (blank = insufficient ovulation data)</small>
           </div>
 
           <div className="form-group">

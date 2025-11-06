@@ -1,6 +1,7 @@
 import React, { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App.jsx';
+import { BrowserRouter } from 'react-router-dom';
 
 class TopLevelErrorBoundary extends React.Component {
   constructor(props) {
@@ -26,8 +27,10 @@ class TopLevelErrorBoundary extends React.Component {
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    <TopLevelErrorBoundary>
-      <App />
-    </TopLevelErrorBoundary>
+    <BrowserRouter>
+      <TopLevelErrorBoundary>
+        <App />
+      </TopLevelErrorBoundary>
+    </BrowserRouter>
   </StrictMode>,
 )

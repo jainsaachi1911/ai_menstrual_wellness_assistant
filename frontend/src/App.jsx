@@ -1,5 +1,5 @@
 import React, { Component } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import ChatSidebar from './components/ChatSidebar';
 
@@ -31,6 +31,7 @@ import Login from './pages/Login';
 import Signup from './pages/Signup';
 import User from './pages/User';
 import Analysis from './pages/Analysis';
+import Calendar from './pages/Calendar';
 import './App.css';
 
 const HomeWithChatButton = ({ onOpenChat, chatOpen }) => (
@@ -49,26 +50,33 @@ const HomeWithChatButton = ({ onOpenChat, chatOpen }) => (
 
 function App() {
   const [chatOpen, setChatOpen] = React.useState(false);
+  const [navOpen, setNavOpen] = React.useState(true);
+  const location = useLocation();
+  const hideNavbar = location.pathname === '/login' || location.pathname === '/signup';
+  
   return (
-    <Router>
-      <div style={{ display: 'flex' }}>
-        <Navbar />
-        <div style={{ marginLeft: 200, padding: '40px 30px', width: '100%' }}>
-          <h1>AI Menstrual Wellness Assistant</h1>
-          <Routes>
-            <Route path="/home" element={<HomeWithChatButton onOpenChat={() => setChatOpen(true)} chatOpen={chatOpen} />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/signup" element={<Signup />} />
-            <Route path="/user" element={<User />} />
-            <Route path="/analysis" element={<Analysis />} />
-            <Route path="/" element={<Navigate to="/home" />} />
-          </Routes>
-        </div>
-        <ErrorBoundary>
-          <ChatSidebar isOpen={chatOpen} onClose={() => setChatOpen(false)} />
-        </ErrorBoundary>
+    <div style={{ display: 'flex' }}>
+      {!hideNavbar && <Navbar onToggle={(isOpen) => setNavOpen(isOpen)} />}
+      <div style={{ 
+        marginLeft: hideNavbar ? 0 : (navOpen ? 200 : 70), 
+        padding: '40px 30px', 
+        width: '100%',
+        transition: 'margin-left 0.3s ease'
+      }}>
+        <Routes>
+          <Route path="/home" element={<HomeWithChatButton onOpenChat={() => setChatOpen(true)} chatOpen={chatOpen} />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/signup" element={<Signup />} />
+          <Route path="/user" element={<User />} />
+          <Route path="/calendar" element={<Calendar />} />
+          <Route path="/analysis" element={<Analysis />} />
+          <Route path="/" element={<Navigate to="/signup" />} />
+        </Routes>
       </div>
-    </Router>
+      <ErrorBoundary>
+        <ChatSidebar isOpen={chatOpen} onClose={() => setChatOpen(false)} />
+      </ErrorBoundary>
+    </div>
   );
 }
 

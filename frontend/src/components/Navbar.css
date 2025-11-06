@@ -8,10 +8,21 @@
   box-shadow: 2px 0 8px rgba(0,0,0,0.04);
   padding-top: 40px;
   z-index: 100;
+  /* Smoother, slower ease-in-out transition for opening/closing */
+  transition: width 0.5s ease-in-out;
+}
+
+.sidebar-navbar.closed {
+  width: 70px;
 }
 .sidebar-navbar ul {
   list-style: none;
   padding: 0;
+  transition: opacity 0.3s ease;
+}
+
+.sidebar-navbar.closed ul {
+  /* Removed opacity and pointer-events to keep icons visible and interactive */
 }
 .sidebar-navbar li {
   margin: 30px 0;
@@ -22,7 +33,68 @@
   font-weight: 600;
   font-size: 1.1em;
   transition: color 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  transition: all 0.2s ease;
 }
 .sidebar-navbar a:hover {
-  color: #007bff;
+  color: #e91e63;
+  background-color: rgba(233, 30, 99, 0.1);
+}
+.sidebar-navbar a span {
+  flex: 1;
+  max-width: 120px; /* allow room for text when open */
+  transition: max-width 0.5s ease-in-out, opacity 0.5s ease-in-out;
+}
+
+.sidebar-navbar.closed a span {
+  opacity: 0;
+  max-width: 0;
+  overflow: hidden;
+  transition: max-width 0.3s ease, opacity 0.3s ease;
+}
+
+/* Pink icon styling */
+.sidebar-navbar a svg {
+  color: #e91e63; /* Pink color for icons */
+  transition: color 0.2s ease;
+}
+
+.sidebar-navbar a:hover svg {
+  color: #ad1457; /* Darker pink on hover */
+}
+
+/* Toggle button styling */
+.navbar-toggle {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 6px;
+  background-color: #e91e63;
+  color: white;
+  transition: background-color 0.2s ease;
+}
+
+.navbar-toggle:hover {
+  background-color: #ad1457;
+}
+
+/* Icon-only mode for closed state */
+.sidebar-navbar.closed a {
+  justify-content: center;
+  padding: 8px;
+}
+
+.sidebar-navbar.closed li {
+  margin: 20px 0;
 }

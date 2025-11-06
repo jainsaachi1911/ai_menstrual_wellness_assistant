@@ -37,7 +37,7 @@ MODELS_DIR = os.path.join(os.path.dirname(__file__), '..', 'models')
 # Load models
 print("Loading models...")
 try:
-    with open(os.path.join(MODELS_DIR, 'clusterdev_gmm_model.pkl'), 'rb') as f:
+    with open(os.path.join(MODELS_DIR, 'cluster_model (2).pkl'), 'rb') as f:
         clusterdev_model = pickle.load(f)
     print("✓ ClusterDev GMM model loaded")
     print(f"   Type: {type(clusterdev_model)}")
@@ -48,7 +48,7 @@ except Exception as e:
     clusterdev_model = None
 
 try:
-    with open(os.path.join(MODELS_DIR, 'menstrual_risk_user_model.pkl'), 'rb') as f:
+    with open(os.path.join(MODELS_DIR, 'risk_model (2).pkl'), 'rb') as f:
         risk_model = pickle.load(f)
     print("✓ Menstrual Risk User model loaded")
     print(f"   Type: {type(risk_model)}")
@@ -59,7 +59,7 @@ except Exception as e:
     risk_model = None
 
 try:
-    with open(os.path.join(MODELS_DIR, 'catboost_model.pkl'), 'rb') as f:
+    with open(os.path.join(MODELS_DIR, 'prwi_model (2).pkl'), 'rb') as f:
         prwi_model = pickle.load(f)
     print("✓ CatBoost model loaded")
     print(f"   Type: {type(prwi_model)}")
@@ -85,6 +85,30 @@ PRWI_FEATURES = [
     'AvgBleedingIntensity', 'Age', 'BMI', 'Numberpreg', 'Abortions',
     'AgeM', 'Breastfeeding'
 ]
+
+def sanitize_features(raw: Dict[str, Any]) -> Dict[str, Any]:
+    """Convert string/numeric values to appropriate numeric types and flatten booleans"""
+    cleaned = {}
+    for k, v in raw.items():
+        if isinstance(v, bool):
+            cleaned[k] = int(v)
+        elif isinstance(v, (int, float)):
+            cleaned[k] = v
+        elif isinstance(v, str):
+            # try to convert to int or float
+            try:
+                if v.strip() == '':
+                    continue  # skip empty strings
+                if '.' in v:
+                    cleaned[k] = float(v)
+                else:
+                    cleaned[k] = int(v)
+            except ValueError:
+                # non-numeric string – keep as-is (e.g., cycles serialized) or ignore
+                cleaned[k] = v
+        else:
+            cleaned[k] = v
+    return cleaned
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
@@ -188,6 +212,11 @@ def predict_risk(features: Dict[str, float]) -> Dict[str, Any]:
         import traceback
         traceback.print_exc()
         return {'error': f'Risk prediction failed: {str(e)}'}
+
+def predict_prwi(features: Dict[str, float]) -> Dict[str, Any]:
+    """Predict PRWI score using the CatBoost regression model"""
+    if prwi_model is None:
+        return {'error': 'PRWI model not loaded'}
     try:
         df = pd.DataFrame([features])
 
@@ -199,7 +228,7 @@ def predict_risk(features: Dict[str, float]) -> Dict[str, Any]:
             if model is None:
                 return {'error': 'PRWI model not found in saved file'}
 
-            # Use the feature names order
+            # Ensure all required features are present
             for feat in feature_names:
                 if feat not in df.columns:
                     df[feat] = 0
@@ -208,7 +237,7 @@ def predict_risk(features: Dict[str, float]) -> Dict[str, Any]:
             # Scale the features
             df_scaled = pd.DataFrame(scaler.transform(df), columns=df.columns)
 
-            # Use CatBoost for prediction
+            # Predict PRWI score using CatBoost
             score = model.predict(df_scaled)
 
             return {
@@ -325,23 +354,26 @@ def predict():
         print(f"Session ID: {session_id}")
         
         # Combine all data from the session
-        features = {}
+        raw_features = {}
         if session_id in form_data_store:
             cycle_data = form_data_store[session_id].get('cycle_data', {})
             user_data = form_data_store[session_id].get('user_data', {})
             symptoms_data = form_data_store[session_id].get('symptoms_data', {})
             
-            features.update(cycle_data)
-            features.update(user_data)
-            features.update(symptoms_data)
+            raw_features.update(cycle_data)
+            raw_features.update(user_data)
+            raw_features.update(symptoms_data)
         
         # Also accept direct features if provided
         if 'features' in data:
-            features.update(data['features'])
+            raw_features.update(data['features'])
+
+        # Sanitize feature values (convert numeric strings to floats/ints, booleans to int)
+        features = sanitize_features(raw_features)
         
         models_to_run = data.get('models', ['all'])
         
-        print(f"Features received: {len(features)} features")
+        print(f"Features received (after sanitization): {len(features)} features")
         print(f"Models to run: {models_to_run}")
         print(f"Sample features: {list(features.keys())[:5] if features else 'None'}")
         
