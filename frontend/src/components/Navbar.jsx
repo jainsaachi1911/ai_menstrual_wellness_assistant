@@ -9,7 +9,8 @@ import {
   Menu,
   X,
   LogOut,
-  UserCircle
+  UserCircle,
+  Heart
 } from 'lucide-react';
 import { auth, db } from '../services/firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
@@ -106,96 +107,41 @@ export default function Navbar({ isOpen: controlledIsOpen, handleToggle: control
   };
 
   return (
-    <nav className={`sidebar-navbar ${isOpen ? 'open' : 'closed'}`}>
-      <div 
-        className="navbar-toggle" 
-        onClick={toggle} 
-        aria-label={isOpen ? 'Close sidebar' : 'Open sidebar'}
-      >
-        {isOpen ? <X size={22} /> : <Menu size={22} />}
-      </div>
-
-      <div className="navbar-brand">
-        <span className="brand-text">LUNARA</span>
-      </div>
-
-      <ul className="nav-list">
-        <li>
-          <Link 
-            to="/home" 
-            title="Home"
-            className={isActive('/home') ? 'active' : ''}
-          >
-            <Home size={24} />
-            <span className="nav-text">Home</span>
+    <nav className="top-navbar">
+      <div className="navbar-container">
+        {/* Left - Navigation Links */}
+        <div className="nav-left">
+          <Link to="/home" className={isActive('/home') ? 'nav-link active' : 'nav-link'}>
+            Home
           </Link>
-        </li>
-
-        <li>
-          <Link 
-            to="/user" 
-            title="User"
-            className={isActive('/user') ? 'active' : ''}
-          >
-            <User size={24} />
-            <span className="nav-text">User</span>
+          <Link to="/calendar" className={isActive('/calendar') ? 'nav-link active' : 'nav-link'}>
+            Calendar
           </Link>
-        </li>
-
-        <li>
-          <Link 
-            to="/calendar" 
-            title="Calendar"
-            className={isActive('/calendar') ? 'active' : ''}
-          >
-            <CalendarDays size={24} />
-            <span className="nav-text">Calendar</span>
+          <Link to="/analysis" className={isActive('/analysis') ? 'nav-link active' : 'nav-link'}>
+            Analysis
           </Link>
-        </li>
-
-        <li>
-          <Link 
-            to="/analysis" 
-            title="Analysis"
-            className={isActive('/analysis') ? 'active' : ''}
-          >
-            <BarChart3 size={24} />
-            <span className="nav-text">Analysis</span>
-          </Link>
-        </li>
-
-        <li>
-          <Link 
-            to="/ai-chat" 
-            title="AI Assistance"
-            className={isActive('/ai-chat') ? 'active' : ''}
-          >
-            <MessageSquare size={24} />
-            <span className="nav-text">AI Assistance</span>
-          </Link>
-        </li>
-      </ul>
-
-      {/* User Profile Section at Bottom */}
-      <div className="navbar-profile">
-        <div className="profile-info">
-          <div className="profile-pic-nav">
-            {userProfile.profilePicture ? (
-              <img src={userProfile.profilePicture} alt="Profile" />
-            ) : (
-              <UserCircle size={28} />
-            )}
-          </div>
-          <div className="profile-details">
-            <span className="profile-name">
-              {`${userProfile.firstName} ${userProfile.lastName}`.trim() || 'User'}
-            </span>
-          </div>
         </div>
-        <button className="logout-btn" onClick={handleLogout} title="Logout">
-          <LogOut size={20} />
-          <span className="logout-text">Logout</span>
-        </button>
+
+        {/* Center - Logo/Brand */}
+        <div className="nav-center">
+          <Link to="/home" className="navbar-brand">
+            <Heart size={24} className="brand-icon" />
+            <span className="brand-text">LUNARA</span>
+          </Link>
+        </div>
+
+        {/* Right - User Actions */}
+        <div className="nav-right">
+          <Link to="/ai-chat" className={isActive('/ai-chat') ? 'nav-link active' : 'nav-link'}>
+            AI Chat
+          </Link>
+          <Link to="/user" className={isActive('/user') ? 'nav-link active' : 'nav-link'}>
+            Profile
+          </Link>
+          <button className="logout-btn-top" onClick={handleLogout} title="Logout">
+            <LogOut size={18} />
+          </button>
+        </div>
       </div>
     </nav>
   );

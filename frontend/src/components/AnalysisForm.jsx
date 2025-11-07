@@ -143,6 +143,7 @@ const AnalysisForm = () => {
   const cyclesLoadedRef = useRef(false);
   const [cyclesLoaded, setCyclesLoaded] = useState(false);
   const [formInitialized, setFormInitialized] = useState(false);
+  const [nextPeriodPrediction, setNextPeriodPrediction] = useState(null);
 
   // Helper function to show notifications
   const showNotification = (message, type = 'success', duration = 3000) => {
@@ -242,6 +243,41 @@ const AnalysisForm = () => {
     }
   }, [currentDate.getFullYear(), currentDate.getMonth(), cyclesMap, cyclesLoaded, ensureValidSymptoms, memoizedInitialSymptoms, user]);
 
+  // Predict next period based on cycle history
+  const predictNextPeriod = useCallback(async (cyclesList) => {
+    if (!cyclesList || cyclesList.length < 2) {
+      setNextPeriodPrediction(null);
+      return;
+    }
+
+    try {
+      const cyclesData = cyclesList.map(cycle => ({
+        startDate: cycle.start,
+        endDate: cycle.end,
+        monthKey: cycle.month
+      }));
+
+      const response = await fetch(`${API_BASE_URL}/api/predict-next-period`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cycles: cyclesData })
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      if (data.success) {
+        setNextPeriodPrediction(data.prediction);
+      }
+    } catch (error) {
+      console.error('Error predicting next period:', error);
+      setNextPeriodPrediction(null);
+    }
+  }, []);
+
   const buildCyclesFromMap = useCallback(() => {
     const arr = Object.entries(cyclesMap).map(([month, obj]) => ({ month, ...obj }));
     arr.sort((a, b) => {
@@ -249,8 +285,16 @@ const AnalysisForm = () => {
       return a.month.localeCompare(b.month);
     });
     setCycles(arr);
+    
+    // Predict next period whenever cycles change
+    if (arr.length >= 2) {
+      predictNextPeriod(arr);
+    } else {
+      setNextPeriodPrediction(null);
+    }
+    
     return arr;
-  }, [cyclesMap, ensureValidSymptoms]);
+  }, [cyclesMap, ensureValidSymptoms, predictNextPeriod]);
 
   const changeMonth = (offset) => {
     const d = new Date(currentDate);
@@ -602,6 +646,48 @@ const AnalysisForm = () => {
     }
   };
 
+  const cleanupDuplicates = async () => {
+    if (!user) {
+      showNotification('Please sign in to cleanup duplicates', 'error');
+      return;
+    }
+
+    try {
+      showNotification('Cleaning up duplicate cycles...', 'info');
+      await removeDuplicateCycles(user.uid);
+      
+      // Reload cycles after cleanup
+      const updatedCycles = await getCycles(user.uid);
+      const map = {};
+      for (const c of updatedCycles) {
+        const startISO = c.startDate?.toDate?.() ? c.startDate.toDate().toISOString().slice(0,10) : c.startDate;
+        const endISO = c.endDate?.toDate?.() ? c.endDate.toDate().toISOString().slice(0,10) : c.endDate;
+        if (!startISO || !endISO) continue;
+        
+        const key = c.monthKey || getMonthKey(new Date(startISO));
+        const symptomsToStore = (c.symptoms && typeof c.symptoms === 'object') 
+          ? c.symptoms 
+          : memoizedInitialSymptoms;
+        
+        if (!map[key]) {
+          map[key] = {
+            start: startISO,
+            end: endISO,
+            intensity: c.intensity ? String(c.intensity) : '',
+            symptoms: symptomsToStore,
+            id: c.id,
+          };
+        }
+      }
+      
+      setCyclesMap(map);
+      showNotification('Duplicate cycles cleaned up successfully!', 'success');
+    } catch (error) {
+      console.error('Error cleaning up duplicates:', error);
+      showNotification('Failed to cleanup duplicates. Please try again.', 'error');
+    }
+  };
+
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
     setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
@@ -679,7 +765,15 @@ const AnalysisForm = () => {
     const isStart = tempStart === iso;
     const isEnd = tempEnd === iso;
     const inRange = tempStart && tempEnd && (new Date(iso) >= new Date(tempStart)) && (new Date(iso) <= new Date(tempEnd));
-    cells.push({ iso, day: cellDate.getDate(), inCurrentMonth, isStart, isEnd, inRange });
+    
+    // Check if this date is in the predicted period range
+    const isPredictedStart = nextPeriodPrediction && iso === nextPeriodPrediction.predictedStartDate.slice(0, 10);
+    const isPredictedEnd = nextPeriodPrediction && iso === nextPeriodPrediction.predictedEndDate.slice(0, 10);
+    const inPredictedRange = nextPeriodPrediction && 
+      (new Date(iso) >= new Date(nextPeriodPrediction.predictedStartDate)) && 
+      (new Date(iso) <= new Date(nextPeriodPrediction.predictedEndDate));
+    
+    cells.push({ iso, day: cellDate.getDate(), inCurrentMonth, isStart, isEnd, inRange, isPredictedStart, isPredictedEnd, inPredictedRange });
   }
 
   return (
@@ -691,12 +785,54 @@ const AnalysisForm = () => {
         </div>
       )}
 
+      {/* Next Period Prediction Info - Above Everything */}
+      {nextPeriodPrediction && (
+        <div style={{
+          background: 'linear-gradient(135deg, rgba(157, 230, 186, 0.2), rgba(153, 213, 255, 0.15))',
+          border: '2px solid rgba(157, 230, 186, 0.5)',
+          borderRadius: '20px',
+          padding: '24px 28px',
+          marginBottom: '30px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '14px',
+          boxShadow: '0 8px 24px rgba(157, 230, 186, 0.2)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontWeight: 700, fontSize: '1.35rem', color: '#2d3748' }}>
+            <Sparkles size={26} style={{ color: '#48bb78' }} />
+            Next Period Prediction
+          </div>
+          <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap', fontSize: '1.1rem' }}>
+            <div>
+              <span style={{ color: '#4a5568', fontWeight: 600 }}>Expected: </span>
+              <span style={{ fontWeight: 700, fontSize: '1.15rem', color: '#2d3748' }}>
+                {new Date(nextPeriodPrediction.predictedStartDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - {new Date(nextPeriodPrediction.predictedEndDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+              </span>
+            </div>
+            <div>
+              <span style={{ color: '#4a5568', fontWeight: 600 }}>Confidence: </span>
+              <span style={{ fontWeight: 700, fontSize: '1.15rem', color: nextPeriodPrediction.confidence === 'high' ? '#48bb78' : nextPeriodPrediction.confidence === 'medium' ? '#ed8936' : '#f56565' }}>
+                {nextPeriodPrediction.confidencePercentage}% ({nextPeriodPrediction.confidence})
+              </span>
+            </div>
+            <div>
+              <span style={{ color: '#4a5568', fontWeight: 600 }}>Based on: </span>
+              <span style={{ fontWeight: 700, fontSize: '1.15rem', color: '#2d3748' }}>{nextPeriodPrediction.basedOnCycles} cycles</span>
+            </div>
+          </div>
+          <div style={{ fontSize: '1rem', color: '#718096', fontStyle: 'italic', marginTop: '4px' }}>
+            💚 Green highlighted dates in the calendar below show your predicted period
+          </div>
+        </div>
+      )}
+
       {/* Welcoming Header */}
       <div className="calendar-header">
         <h2>Your Wellness Journey</h2>
       </div>
 
       <div className="period-tracker">
+
         <div className="calendar-nav">
           <button type="button" className="nav-arrow" onClick={() => changeMonth(-1)}>
             <ChevronLeft size={24} />
@@ -707,6 +843,7 @@ const AnalysisForm = () => {
           </button>
         </div>
 
+        {/* Calendar Grid with Prediction Highlights */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 6 }}>
           {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d => (
             <div key={d} style={{ textAlign: 'center', fontWeight: 700 }}>{d}</div>
@@ -720,10 +857,16 @@ const AnalysisForm = () => {
               tabIndex={0}
               style={{
                 aspectRatio: '1 / 1',
-                border: '1px solid #ddd',
+                border: c.inPredictedRange ? '2px solid #9de6ba' : '1px solid #ddd',
                 borderRadius: 6,
                 padding: 6,
-                background: c.isStart ? '#e6f4ff' : c.isEnd ? '#fff0f0' : c.inRange ? '#f0f8ff' : (c.inCurrentMonth ? 'white' : '#fafafa'),
+                background: c.isStart ? '#e6f4ff' : 
+                           c.isEnd ? '#fff0f0' : 
+                           c.inRange ? '#f0f8ff' : 
+                           c.isPredictedStart ? '#d4f4dd' :
+                           c.isPredictedEnd ? '#d4f4dd' :
+                           c.inPredictedRange ? '#e8f8ed' :
+                           (c.inCurrentMonth ? 'white' : '#fafafa'),
                 color: c.inCurrentMonth ? 'inherit' : '#999',
                 cursor: 'pointer',
                 display: 'flex',
@@ -731,98 +874,52 @@ const AnalysisForm = () => {
                 justifyContent: 'space-between'
               }}
             >
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
                 <div style={{ fontWeight: 600 }}>{c.day}</div>
                 {c.isStart && <div style={{ fontSize: 11, padding: '2px 6px', borderRadius: 10, background: '#2b6cb0', color: 'white' }}>Start</div>}
                 {c.isEnd && <div style={{ fontSize: 11, padding: '2px 6px', borderRadius: 10, background: '#e53e3e', color: 'white' }}>End</div>}
+                {c.isPredictedStart && <div style={{ fontSize: 10, padding: '2px 5px', borderRadius: 8, background: '#9de6ba', color: '#000', fontWeight: 600 }}>Pred</div>}
+                {c.isPredictedEnd && !c.isPredictedStart && <div style={{ fontSize: 10, padding: '2px 5px', borderRadius: 8, background: '#9de6ba', color: '#000', fontWeight: 600 }}>End</div>}
               </div>
             </div>
           ))}
         </div>
 
         <div className="calendar-actions">
-          <button type="button" onClick={clearCurrentMonth}>Clear Month</button>
           <button type="button" onClick={saveCurrentMonth}>Save Month</button>
+          <button type="button" onClick={clearCurrentMonth}>Clear Month</button>
+          <button type="button" onClick={computeMetrics}>Calculate Metrics</button>
+          <button type="button" onClick={cleanupDuplicates} className="cleanup-btn">Clean Duplicates</button>
         </div>
-
-        {/* <div style={{ marginTop: 16 }}>
-          <h4>Tracked Months</h4>
-          {Object.keys(cyclesMap).length === 0 && <div>No months saved yet.</div>}
-          {Object.entries(cyclesMap).map(([k, v]) => (
-            <div key={k} style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 8 }}>
-              <strong>{k}</strong>
-              <div>Start: {v.start || '-'}</div>
-              <div>End: {v.end || '-'}</div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 6 }}>
-        {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d => (
-          <div key={d} style={{ textAlign: 'center', fontWeight: 700 }}>{d}</div>
-        ))}
-
-        {cells.map((c, idx) => (
-          <div
-            key={idx}
-            onClick={() => handleDayClick(c.iso)}
-            role="button"
-            tabIndex={0}
-            style={{
-              aspectRatio: '1 / 1',
-              border: '1px solid #ddd',
-              borderRadius: 6,
-              padding: 6,
-              background: c.isStart ? '#e6f4ff' : c.isEnd ? '#fff0f0' : c.inRange ? '#f0f8ff' : (c.inCurrentMonth ? 'white' : '#fafafa'),
-              color: c.inCurrentMonth ? 'inherit' : '#999',
-              cursor: 'pointer',
-              display: 'flex',
-              flexDirection: 'column',
-              justifyContent: 'space-between'
-            }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <div style={{ fontWeight: 600 }}>{c.day}</div>
-              {c.isStart && <div style={{ fontSize: 11, padding: '2px 6px', borderRadius: 10, background: '#2b6cb0', color: 'white' }}>Start</div>}
-              {c.isEnd && <div style={{ fontSize: 11, padding: '2px 6px', borderRadius: 10, background: '#e53e3e', color: 'white' }}>End</div>}
-            </div>
+      {/* Symptoms Tracker */}
+      <div className="symptoms-card">
+        <h4>How did you feel this month?</h4>
+        
+        {/* Bleeding Intensity */}
+        <div className="symptom-section">
+          <h5>Flow Intensity</h5>
+          <div className="intensity-selector">
+            {[1,2,3,4,5].map(lv => (
+              <div
+                key={lv}
+                className={`intensity-box level-${lv} ${Number(tempIntensity)===lv ? 'active' : ''}`}
+                onClick={() => setTempIntensity(String(lv))}
+                role="button"
+                tabIndex={0}
+                onKeyPress={(e)=>{if(e.key==='Enter') setTempIntensity(String(lv));}}
+              />
+            ))}
           </div>
-        ))}
-      </div>
-
-      <div className="calendar-actions">
-        <button type="button" onClick={saveCurrentMonth}>Save Month</button>
-        <button type="button" onClick={clearCurrentMonth}>Clear Month</button>
-        <button type="button" onClick={computeMetrics}>Calculate Metrics</button>
-        <button type="button" onClick={cleanupDuplicates} className="cleanup-btn">Clean Duplicates</button>
-      </div>
-    </div>
-
-    {/* Symptoms Tracker */}
-    <div className="symptoms-card">
-      <h4>How did you feel this month?</h4>
-      
-      {/* Bleeding Intensity */}
-      <div className="symptom-section">
-        <h5>Flow Intensity</h5>
-        <div className="intensity-selector">
-          {[1,2,3,4,5].map(lv => (
-            <div
-              key={lv}
-              className={`intensity-box level-${lv} ${Number(tempIntensity)===lv ? 'active' : ''}`}
-              onClick={() => setTempIntensity(String(lv))}
-              role="button"
-              tabIndex={0}
-              onKeyPress={(e)=>{if(e.key==='Enter') setTempIntensity(String(lv));}}
-            />
-          ))}
         </div>
-      </div>
-      
-      {/* Intensity-based symptoms with slider */}
-      <div className="symptom-section">
-        <h5>Intensity Symptoms</h5>
-        <div className="symptoms-intensity-grid">
-          {/* Cramps Intensity */}
-          <div className="symptom-intensity-item">
+        
+        {/* Intensity-based symptoms with slider */}
+        <div className="symptom-section">
+          <h5>Intensity Symptoms</h5>
+          <div className="symptoms-intensity-grid">
+            {/* Cramps Intensity */}
+            <div className="symptom-intensity-item">
               <div className="symptom-header">
                 <Activity size={20} className="symptom-icon" />
                 <span className="symptom-label">Cramps</span>
@@ -857,8 +954,8 @@ const AnalysisForm = () => {
               </div>
             </div>
 
-          {/* Fatigue Intensity */}
-          <div className="symptom-intensity-item">
+            {/* Fatigue Intensity */}
+            <div className="symptom-intensity-item">
               <div className="symptom-header">
                 <Zap size={20} className="symptom-icon" />
                 <span className="symptom-label">Fatigue</span>
@@ -893,8 +990,8 @@ const AnalysisForm = () => {
               </div>
             </div>
 
-          {/* Back Pain Intensity */}
-          <div className="symptom-intensity-item">
+            {/* Back Pain Intensity */}
+            <div className="symptom-intensity-item">
               <div className="symptom-header">
                 <ArrowDown size={20} className="symptom-icon" />
                 <span className="symptom-label">Back Pain</span>
@@ -928,11 +1025,11 @@ const AnalysisForm = () => {
                 </button>
               </div>
             </div>
+          </div>
         </div>
-      </div>
 
-      {/* Toggle symptoms */}
-      <div className="symptom-section">
+        {/* Toggle symptoms */}
+        <div className="symptom-section">
           <h5>Yes/No Symptoms</h5>
           <div className="symptoms-toggle-grid">
             <div 
@@ -972,10 +1069,9 @@ const AnalysisForm = () => {
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Rating symptoms */}
-      <div className="symptom-section">
+        {/* Rating symptoms */}
+        <div className="symptom-section">
           <h5>Rate Severity</h5>
           <div className="symptoms-rating-grid">
             {/* Mood Swings Rating */}
@@ -1015,16 +1111,15 @@ const AnalysisForm = () => {
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Calculate Metrics Button */}
-      <div className="metrics-button-container">
-        <button type="button" className="calculate-metrics-btn" onClick={computeMetrics}>
-          Calculate Metrics
-        </button>
+        {/* Calculate Metrics Button */}
+        <div className="metrics-button-container">
+          <button type="button" className="calculate-metrics-btn" onClick={computeMetrics}>
+            Calculate Metrics
+          </button>
+        </div>
       </div>
-
-  </div>
+    </div>
   );
 };
 

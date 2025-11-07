@@ -1519,6 +1519,114 @@ def calculate_metrics_endpoint():
             'error': str(e)
         }), 500
 
+@app.route('/api/predict-next-period', methods=['POST'])
+def predict_next_period():
+    """Predict the next period start and end dates based on cycle history"""
+    try:
+        from datetime import datetime, timedelta
+        import statistics
+        
+        data = request.get_json()
+        cycles = data.get('cycles', [])
+        
+        if len(cycles) < 2:
+            return jsonify({
+                'success': False,
+                'error': 'At least 2 cycles required for prediction'
+            }), 400
+        
+        # Filter valid cycles (must have startDate)
+        valid_cycles = [c for c in cycles if c.get('startDate')]
+        
+        if len(valid_cycles) < 2:
+            return jsonify({
+                'success': False,
+                'error': 'At least 2 complete cycles required'
+            }), 400
+        
+        # Sort cycles by start date
+        sorted_cycles = sorted(valid_cycles, key=lambda c: c['startDate'])
+        
+        # Calculate cycle lengths (days between consecutive periods)
+        cycle_lengths = []
+        for i in range(len(sorted_cycles) - 1):
+            start1 = datetime.fromisoformat(sorted_cycles[i]['startDate'].replace('Z', '+00:00'))
+            start2 = datetime.fromisoformat(sorted_cycles[i + 1]['startDate'].replace('Z', '+00:00'))
+            length = (start2 - start1).days
+            if 15 <= length <= 50:  # Valid cycle length range
+                cycle_lengths.append(length)
+        
+        if not cycle_lengths:
+            return jsonify({
+                'success': False,
+                'error': 'No valid cycle lengths found'
+            }), 400
+        
+        # Calculate average cycle length and standard deviation
+        avg_cycle_length = statistics.mean(cycle_lengths)
+        std_cycle_length = statistics.stdev(cycle_lengths) if len(cycle_lengths) > 1 else 0
+        
+        # Calculate average menses duration (period length)
+        menses_durations = []
+        for cycle in sorted_cycles:
+            if cycle.get('startDate') and cycle.get('endDate'):
+                start = datetime.fromisoformat(cycle['startDate'].replace('Z', '+00:00'))
+                end = datetime.fromisoformat(cycle['endDate'].replace('Z', '+00:00'))
+                duration = (end - start).days + 1  # +1 to include both start and end day
+                if 1 <= duration <= 10:  # Valid menses duration
+                    menses_durations.append(duration)
+        
+        avg_menses_duration = statistics.mean(menses_durations) if menses_durations else 5
+        
+        # Get the last period start date
+        last_cycle = sorted_cycles[-1]
+        last_period_start = datetime.fromisoformat(last_cycle['startDate'].replace('Z', '+00:00'))
+        
+        # Predict next period start date
+        predicted_start = last_period_start + timedelta(days=round(avg_cycle_length))
+        
+        # Predict next period end date
+        predicted_end = predicted_start + timedelta(days=round(avg_menses_duration) - 1)
+        
+        # Calculate confidence based on cycle regularity
+        # Lower std deviation = higher confidence
+        if std_cycle_length < 2:
+            confidence = 'high'
+            confidence_percentage = 90
+        elif std_cycle_length < 4:
+            confidence = 'medium'
+            confidence_percentage = 75
+        else:
+            confidence = 'low'
+            confidence_percentage = 60
+        
+        # Calculate prediction window (±std deviation)
+        earliest_start = predicted_start - timedelta(days=round(std_cycle_length))
+        latest_start = predicted_start + timedelta(days=round(std_cycle_length))
+        
+        return jsonify({
+            'success': True,
+            'prediction': {
+                'predictedStartDate': predicted_start.isoformat(),
+                'predictedEndDate': predicted_end.isoformat(),
+                'earliestStartDate': earliest_start.isoformat(),
+                'latestStartDate': latest_start.isoformat(),
+                'avgCycleLength': round(avg_cycle_length, 1),
+                'avgMensesDuration': round(avg_menses_duration, 1),
+                'cycleVariability': round(std_cycle_length, 1),
+                'confidence': confidence,
+                'confidencePercentage': confidence_percentage,
+                'basedOnCycles': len(cycle_lengths)
+            }
+        })
+        
+    except Exception as e:
+        print(f"Error predicting next period: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
 def calculate_metrics_from_data(user_data, cycles):
     """
     Calculate all 18 menstrual health metrics from user data and cycles.

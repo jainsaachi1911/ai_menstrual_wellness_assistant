@@ -19,20 +19,16 @@
 
 .user-profile-container {
   min-height: 100vh;
-  padding: 30px 40px 30px 270px;
+  padding: 100px 0 60px 0;
   background: #ffeef5;
   display: flex;
-  justify-content: flex-start;
-  align-items: flex-start;
+  justify-content: center;
+  align-items: center;
   font-family: 'Times New Roman', Times, serif;
   transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
-  width: 100vw;
-  margin-left: 0;
-}
-
-.user-profile-container.navbar-closed {
-  padding-left: 118px;
+  width: 100%;
+  margin: 0;
 }
 
 .profile-card {
@@ -42,10 +38,10 @@
   border-radius: 28px;
   box-shadow: 0 12px 40px rgba(184, 163, 255, 0.2),
               0 0 0 1px rgba(255, 255, 255, 0.3) inset;
+  width: calc(100% - 60px);
   max-width: 900px;
-  width: 100%;
   padding: 40px 50px;
-  margin: 0;
+  margin: 0 30px;
   animation: slideUp 0.6s ease-out;
   position: relative;
   overflow: hidden;

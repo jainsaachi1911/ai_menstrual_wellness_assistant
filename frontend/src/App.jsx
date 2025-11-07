@@ -24,10 +24,7 @@ function App() {
     }}>
       {!hideNavbar && <Navbar onToggle={(isOpen) => setNavOpen(isOpen)} />}
       <div style={{ 
-        marginLeft: hideNavbar ? 0 : (navOpen ? 200 : 70), 
-        padding: isHomePage ? '0' : '40px 30px', 
-        width: '100%',
-        transition: 'margin-left 0.3s ease'
+        width: '100%'
       }}>
         <Routes>
           <Route path="/home" element={<Home />} />

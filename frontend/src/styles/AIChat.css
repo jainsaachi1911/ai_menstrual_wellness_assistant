@@ -1,8 +1,9 @@
 /* src/styles/AIChat.css */
 
 .ai-chat-page {
-  width: 100%;
-  height: calc(95vh - 30px); /* Reduced from 80px to 40px for less gap */
+  width: calc(100% - 60px);
+  max-width: 1400px;
+  height: calc(100vh - 140px);
   display: flex;
   flex-direction: column;
   background: linear-gradient(135deg, rgba(255, 170, 197, 0.15), rgba(184, 163, 255, 0.15));
@@ -13,7 +14,7 @@
               0 0 0 1px rgba(255, 255, 255, 0.3) inset;
   border: 1px solid rgba(255, 255, 255, 0.4);
   overflow: hidden;
-  margin: 80px 0px 0px 10px; /* Add margin top/bottom and left/right padding */
+  margin: 90px 30px 20px 30px;
 }
 
 /* Header */

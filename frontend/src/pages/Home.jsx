@@ -1,34 +1,32 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth, db } from '../services/firebase';
 import { doc, getDoc } from 'firebase/firestore';
-import { Calendar, MessageCircle, Activity, Shield, Bot, TrendingUp, Heart, Sparkles, Flower2, Moon, Sun, Star, Zap, Droplet, CloudRain } from 'lucide-react';
+import { Calendar, Shield, TrendingUp, Heart, BarChart3, Sparkles, MessageCircle, ArrowRight } from 'lucide-react';
 import '../styles/Home.css';
 
 const Home = () => {
   const navigate = useNavigate();
   const [checking, setChecking] = useState(true);
   const [firstName, setFirstName] = useState('');
-  const featureCardsRef = useRef([]);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
       if (!user) {
         navigate('/login');
       } else {
-        // Fetch user's first name from Firestore
         try {
           const userRef = doc(db, 'users', user.uid);
           const snap = await getDoc(userRef);
           if (snap.exists()) {
             const profile = snap.data()?.profile || {};
-            setFirstName(profile.firstName || 'Friend');
+            setFirstName(profile.firstName || 'there');
           } else {
-            setFirstName('Friend');
+            setFirstName('there');
           }
         } catch (error) {
-          setFirstName('Friend');
+          setFirstName('there');
         }
         setChecking(false);
       }
@@ -36,152 +34,140 @@ const Home = () => {
     return () => unsub();
   }, [navigate]);
 
-  // Handle feature card animations
-  useEffect(() => {
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach(entry => {
-        if (entry.isIntersecting) {
-          entry.target.classList.add('visible');
-        }
-      });
-    }, { threshold: 0.1 });
-
-    const currentCards = featureCardsRef.current;
-    currentCards.forEach(card => {
-      if (card) observer.observe(card);
-    });
-
-    return () => {
-      currentCards.forEach(card => {
-        if (card) observer.unobserve(card);
-      });
-    };
-  }, []);
-
   if (checking) return null;
 
   return (
     <div className="home-container">
-      {/* Decorative gradient orbs */}
-      <div className="gradient-orb orb-1"></div>
-      <div className="gradient-orb orb-2"></div>
-      <div className="gradient-orb orb-3"></div>
-      <div className="gradient-orb orb-4"></div>
+      {/* Hero Section */}
+      <section className="hero-section">
+        {/* Decorative 3D Elements */}
+        <div className="decoration-3d decoration-1"></div>
+        <div className="decoration-3d decoration-2"></div>
+        <div className="decoration-3d decoration-3"></div>
+        <div className="decoration-3d decoration-4"></div>
 
-      {/* Main content */}
-      <div className="home-content">
-        {/* GROUP 1: Header with Icons */}
-        <div className="header-group">
-          <div className="heading-wrapper">
-            <h1 className="home-main-heading">
-              Nurture Your Wellness,
-              <br />
-              Embrace Your Journey
-            </h1>
-            
-            <p className="home-subheading">
-              Your trusted companion for personalized menstrual health insights and AI-powered cycle tracking
-            </p>
-            
-            {/* Decorative floating icons */}
-            <Heart className="floating-icon icon-1" size={28} />
-            <Sparkles className="floating-icon icon-2" size={24} />
-            <Flower2 className="floating-icon icon-3" size={30} />
-            <Moon className="floating-icon icon-4" size={26} />
-            <Sun className="floating-icon icon-5" size={28} />
-            <Heart className="floating-icon icon-6" size={22} />
-            <Star className="floating-icon icon-7" size={26} />
-            <Zap className="floating-icon icon-8" size={24} />
-            <Droplet className="floating-icon icon-9" size={28} />
-            <CloudRain className="floating-icon icon-10" size={26} />
-          </div>
-        </div>
-
-        {/* GROUP 2: Welcome & Action Buttons */}
-        <div className="welcome-actions-group">
-          <p className="home-greeting">
-            Welcome, <span className="user-name">{firstName}</span>
+        <div className="hero-content">
+          <h1 className="hero-main-title">
+            Track and manage
+            <br />
+            your wellness today
+          </h1>
+          
+          <p className="hero-description">
+            Monitor your menstrual health, understand your body patterns, and get AI-powered insights for better wellness. Track symptoms, predict cycles, and take control of your health journey.
           </p>
           
-          <div className="home-action-buttons">
-            <button 
-              className="home-btn btn-primary"
-              onClick={() => navigate('/calendar')}
-            >
-              <Calendar size={22} />
-              <span>Track Period</span>
-            </button>
-            
-            <button 
-              className="home-btn btn-secondary"
-              onClick={() => navigate('/ai-chat')}
-            >
-              <MessageCircle size={22} />
-              <span>Ask AI Assistant</span>
-            </button>
+          <button className="hero-cta-btn" onClick={() => navigate('/calendar')}>
+            Let's start
+          </button>
+        </div>
+      </section>
+
+      {/* Horizontal Band Section */}
+      <section className="brand-band">
+        <div className="brand-container">
+          <div className="brand-item">
+            <div className="brand-dot"></div>
+            <span>AI Health Insights</span>
+          </div>
+          <div className="brand-item">
+            <div className="brand-dot"></div>
+            <span>Cycle Tracking</span>
+          </div>
+          <div className="brand-item">
+            <div className="brand-dot"></div>
+            <span>Risk Assessment</span>
+          </div>
+          <div className="brand-item">
+            <div className="brand-dot"></div>
+            <span>Wellness Analytics</span>
+          </div>
+          <div className="brand-item">
+            <div className="brand-dot"></div>
+            <span>Personalized Care</span>
+          </div>
+          <div className="brand-item">
+            <div className="brand-dot"></div>
+            <span>Smart Predictions</span>
           </div>
         </div>
+      </section>
 
-        {/* GROUP 3: Features */}
-        <div className="features-group">
-          <h2 className="features-heading">Comprehensive Health Tracking</h2>
-          <p className="features-subheading">Everything you need to understand and manage your menstrual wellness</p>
+      {/* Features Section */}
+      <section className="features-section">
+        <h2 className="section-title">Comprehensive Health Tracking</h2>
+        <p className="section-description">
+          Everything you need to understand and manage your menstrual wellness with advanced AI technology
+        </p>
+
+        <div className="features-grid">
+          <div className="feature-card">
+            <div className="feature-icon pink">
+              <Shield size={40} />
+            </div>
+            <h3 className="feature-title">Smart Risk Assessment</h3>
+            <p className="feature-text">
+              AI-powered analysis identifies potential health concerns early, giving you peace of mind
+            </p>
+          </div>
+
+          <div className="feature-card">
+            <div className="feature-icon purple">
+              <TrendingUp size={40} />
+            </div>
+            <h3 className="feature-title">Cycle Predictions</h3>
+            <p className="feature-text">
+              Accurate predictions for your next period based on your unique patterns and history
+            </p>
+          </div>
+
+          <div className="feature-card">
+            <div className="feature-icon blue">
+              <BarChart3 size={40} />
+            </div>
+            <h3 className="feature-title">Detailed Analytics</h3>
+            <p className="feature-text">
+              Comprehensive insights into your cycle patterns, symptoms, and overall wellness trends
+            </p>
+          </div>
+
+          <div className="feature-card">
+            <div className="feature-icon peach">
+              <Sparkles size={40} />
+            </div>
+            <h3 className="feature-title">Personalized Care</h3>
+            <p className="feature-text">
+              Customized recommendations and insights tailored specifically to your health profile
+            </p>
+          </div>
         </div>
+      </section>
+
+      {/* Collections Section */}
+      <section className="collections-section">
+        <h2 className="collections-title">Health Collections</h2>
+        <p className="collections-description">
+          Explore comprehensive health insights and tracking tools designed specifically for your wellness journey.
+        </p>
         
-        <div className="feature-cards">
-          <div 
-            className="feature-card" 
-            ref={el => featureCardsRef.current[0] = el}
-          >
-            <div className="feature-icon icon-pink">
-              <Activity size={32} strokeWidth={2} />
-            </div>
-            <h3 className="feature-title">Personalized PWRI Score</h3>
-            <p className="feature-description">
-              Get your unique wellness risk index based on your health data
-            </p>
+        <div className="collections-grid">
+          <div className="collection-card" onClick={() => navigate('/card1')}>
+            <img src="/card-photo/Picture1.png" alt="Health Collection 1" className="collection-image" />
           </div>
-
-          <div 
-            className="feature-card" 
-            ref={el => featureCardsRef.current[1] = el}
-          >
-            <div className="feature-icon icon-purple">
-              <Shield size={32} strokeWidth={2} />
-            </div>
-            <h3 className="feature-title">Risk Assessment</h3>
-            <p className="feature-description">
-              Advanced analysis to identify potential health concerns early
-            </p>
+          
+          <div className="collection-card" onClick={() => navigate('/card2')}>
+            <img src="/card-photo/Picture2.png" alt="Health Collection 2" className="collection-image" />
           </div>
-
-          <div 
-            className="feature-card" 
-            ref={el => featureCardsRef.current[2] = el}
-          >
-            <div className="feature-icon icon-blue">
-              <Bot size={32} strokeWidth={2} />
-            </div>
-            <h3 className="feature-title">AI Guiding Assistance</h3>
-            <p className="feature-description">
-              24/7 AI support for your menstrual health questions
-            </p>
+          
+          <div className="collection-card" onClick={() => navigate('/card3')}>
+            <img src="/card-photo/Picture3.png" alt="Health Collection 3" className="collection-image" />
           </div>
-
-          <div 
-            className="feature-card" 
-            ref={el => featureCardsRef.current[3] = el}
-          >
-            <div className="feature-icon icon-peach">
-              <TrendingUp size={32} strokeWidth={2} />
-            </div>
-            <h3 className="feature-title">Lifestyle Analysis</h3>
-            <p className="feature-description">
-              Track patterns and get personalized lifestyle recommendations
-            </p>
+          
+          <div className="collection-card" onClick={() => navigate('/card4')}>
+            <img src="/card-photo/Picture4.png" alt="Health Collection 4" className="collection-image" />
           </div>
         </div>
-      </div>
+      </section>
     </div>
   );
 };
