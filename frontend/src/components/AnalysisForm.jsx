@@ -80,7 +80,8 @@ const AnalysisForm = () => {
   const [tempStart, setTempStart] = useState('');
   const [tempEnd, setTempEnd] = useState('');
   const [tempIntensity, setTempIntensity] = useState('');
-  const [symptoms, setSymptoms] = useState({
+  // Default symptoms template so we can easily reset / clone
+  const initialSymptoms = {
     cramps: 0,        // 0-5 intensity
     headache: false,  // toggle
     fatigue: 0,       // 0-5 intensity
@@ -90,7 +91,9 @@ const AnalysisForm = () => {
     backPain: 0,      // 0-5 intensity
     acne: false,      // toggle
     cravings: 0       // 0-3 rating
-  });
+  };
+
+  const [symptoms, setSymptoms] = useState(initialSymptoms);
 
   const [formData, setFormData] = useState({
     AvgCycleLength: '',
@@ -124,10 +127,12 @@ const AnalysisForm = () => {
       setTempStart(saved.start || '');
       setTempEnd(saved.end || '');
       setTempIntensity(saved.intensity || '');
+      setSymptoms(saved.symptoms || initialSymptoms);
     } else {
       setTempStart('');
       setTempEnd('');
       setTempIntensity('');
+      setSymptoms(initialSymptoms);
     }
   }, [currentDate, cyclesMap]);
 
@@ -148,6 +153,7 @@ const AnalysisForm = () => {
             start: startISO,
             end: endISO,
             intensity: c.intensity ? String(c.intensity) : (c.avgBleedingIntensity ? String(c.avgBleedingIntensity) : ''),
+            symptoms: c.symptoms || initialSymptoms,
           };
         }
         setCyclesMap(map);
@@ -172,7 +178,7 @@ const AnalysisForm = () => {
 
   const saveCurrentMonth = async () => {
     const key = getMonthKey(currentDate);
-    setCyclesMap(prev => ({ ...prev, [key]: { start: tempStart, end: tempEnd, intensity: tempIntensity } }));
+    setCyclesMap(prev => ({ ...prev, [key]: { start: tempStart, end: tempEnd, intensity: tempIntensity, symptoms } }));
     setTimeout(buildCyclesFromMap, 0);
     try {
       if (auth.currentUser && tempStart && tempEnd) {
@@ -185,6 +191,7 @@ const AnalysisForm = () => {
           bleedingByDay: null,
           unusualBleedingByDay: null,
           mensesLengthDays,
+          symptoms, // save monthly symptoms
         });
       }
     } catch (e) {
@@ -195,7 +202,7 @@ const AnalysisForm = () => {
   const clearCurrentMonth = () => {
     const key = getMonthKey(currentDate);
     setCyclesMap(prev => { const copy = { ...prev }; delete copy[key]; return copy; });
-    setTempStart(''); setTempEnd(''); setTempIntensity('');
+    setTempStart(''); setTempEnd(''); setTempIntensity(''); setSymptoms(initialSymptoms);
     setTimeout(buildCyclesFromMap, 0);
   };
 
@@ -505,7 +512,7 @@ const AnalysisForm = () => {
               role="button"
               tabIndex={0}
               style={{
-                minHeight: 70,
+                aspectRatio: '1 / 1',
                 border: '1px solid #ddd',
                 borderRadius: 6,
                 padding: 6,
@@ -553,7 +560,7 @@ const AnalysisForm = () => {
             role="button"
             tabIndex={0}
             style={{
-              minHeight: 70,
+              aspectRatio: '1 / 1',
               border: '1px solid #ddd',
               borderRadius: 6,
               padding: 6,

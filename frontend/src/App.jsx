@@ -35,17 +35,7 @@ import Calendar from './pages/Calendar';
 import './App.css';
 
 const HomeWithChatButton = ({ onOpenChat, chatOpen }) => (
-  <>
-    <Home />
-    {!chatOpen && (
-      <button
-        style={{ position: 'fixed', right: 32, bottom: 32, zIndex: 2002, background: '#f8bbd0', color: '#c94f7c', border: 'none', borderRadius: 24, padding: '12px 24px', fontWeight: 600, fontSize: '1em', boxShadow: '0 2px 8px rgba(201,79,124,0.10)', cursor: 'pointer' }}
-        onClick={onOpenChat}
-      >
-        Open Chat Assistant
-      </button>
-    )}
-  </>
+  <Home onOpenChat={onOpenChat} />
 );
 
 function App() {
@@ -53,13 +43,18 @@ function App() {
   const [navOpen, setNavOpen] = React.useState(true);
   const location = useLocation();
   const hideNavbar = location.pathname === '/login' || location.pathname === '/signup';
+  const isHomePage = location.pathname === '/home';
   
   return (
-    <div style={{ display: 'flex' }}>
+    <div style={{ 
+      display: 'flex',
+      background: 'linear-gradient(135deg, #fef5f8 0%, #f8f0ff 25%, #fff0f8 50%, #f0f8ff 75%, #fef5ff 100%)',
+      minHeight: '100vh'
+    }}>
       {!hideNavbar && <Navbar onToggle={(isOpen) => setNavOpen(isOpen)} />}
       <div style={{ 
         marginLeft: hideNavbar ? 0 : (navOpen ? 200 : 70), 
-        padding: '40px 30px', 
+        padding: isHomePage ? '0' : '40px 30px', 
         width: '100%',
         transition: 'margin-left 0.3s ease'
       }}>

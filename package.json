@@ -2,6 +2,7 @@
   "dependencies": {
     "firebase": "^12.5.0",
     "lucide-react": "^0.552.0",
+    "openai": "^6.8.1",
     "react-router-dom": "^6.30.1"
   }
 }

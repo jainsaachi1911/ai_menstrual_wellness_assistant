@@ -28,6 +28,12 @@ body {
   place-items: center;
   min-width: 320px;
   min-height: 100vh;
+  background: linear-gradient(135deg, 
+    #fef5f8 0%, 
+    #f8f0ff 25%, 
+    #fff0f8 50%, 
+    #f0f8ff 75%, 
+    #fef5ff 100%);
 }
 
 h1 {
@@ -57,7 +63,12 @@ button:focus-visible {
 @media (prefers-color-scheme: light) {
   :root {
     color: #213547;
-    background-color: #ffffff;
+    background: linear-gradient(135deg, 
+      #fef5f8 0%, 
+      #f8f0ff 25%, 
+      #fff0f8 50%, 
+      #f0f8ff 75%, 
+      #fef5ff 100%);
   }
   a:hover {
     color: #747bff;

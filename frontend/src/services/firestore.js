@@ -1,5 +1,5 @@
 import { db } from "./firebase";
-import { doc, setDoc, collection, addDoc, serverTimestamp, getDocs, query, orderBy } from "firebase/firestore";
+import { doc, setDoc, collection, addDoc, serverTimestamp, getDocs, getDoc, query, orderBy } from "firebase/firestore";
 
 export async function saveUserProfile(uid, profile) {
   const userRef = doc(db, "users", uid);
@@ -35,6 +35,34 @@ export async function getCycles(uid) {
   const q = query(cyclesCol, orderBy("startDate", "asc"));
   const snap = await getDocs(q);
   return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+export async function getAnalyses(uid) {
+  const analysesCol = collection(db, "users", uid, "analyses");
+  const q = query(analysesCol, orderBy("createdAt", "desc"));
+  const snap = await getDocs(q);
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+export async function saveAnalysisMetrics(uid, metrics) {
+  const userRef = doc(db, "users", uid);
+  await setDoc(
+    userRef,
+    {
+      analysisMetrics: {
+        ...metrics,
+        lastCalculated: serverTimestamp()
+      },
+      updatedAt: serverTimestamp()
+    },
+    { merge: true }
+  );
+}
+
+export async function getUserProfile(uid) {
+  const userRef = doc(db, "users", uid);
+  const snap = await getDoc(userRef);
+  return snap.exists() ? snap.data() : null;
 }
 
 
