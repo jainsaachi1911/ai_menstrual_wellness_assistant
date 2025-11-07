@@ -1,182 +1,83 @@
 import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend,
+  ArcElement,
+  BarElement,
+  RadialLinearScale,
+} from 'chart.js';
+import { Line, Doughnut, Bar, PolarArea } from 'react-chartjs-2';
 import { auth } from '../services/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
-import { getUserProfile, saveAnalysisMetrics, getAnalyses, getCycles } from '../services/firestore';
-import { 
-  Activity, 
-  Brain, 
-  Heart, 
-  Calendar, 
-  TrendingUp, 
+import { getUserProfile, saveAnalysisMetrics, getAnalyses, getCycles, addAnalysis } from '../services/firestore';
+import {
+  Activity,
+  Brain,
+  Heart,
+  Calendar,
+  TrendingUp,
   BarChart3,
   Clock,
   AlertCircle,
   CheckCircle,
-  Calculator,
-  User,
-  Baby,
-  Scale,
-  Droplet,
-  PieChart,
-  LineChart,
+  Shield,
   Target,
   Zap,
   Eye,
-  EyeOff,
   RefreshCw,
-  Download
+  Download,
+  FileText,
+  PieChart,
+  Sparkles,
+  Award,
+  Droplet,
+  Moon,
+  Sun
 } from 'lucide-react';
 import '../styles/Analysis.css';
 
-// Simple Chart Components
-const CircularProgress = ({ value, max, label, color = '#b8396b' }) => {
-  const percentage = (value / max) * 100;
-  const circumference = 2 * Math.PI * 45;
-  const strokeDasharray = circumference;
-  const strokeDashoffset = circumference - (percentage / 100) * circumference;
-  
-  return (
-    <div className="circular-progress">
-      <svg width="100" height="100" className="progress-ring">
-        <circle
-          cx="50"
-          cy="50"
-          r="45"
-          stroke="#e0e0e0"
-          strokeWidth="8"
-          fill="transparent"
-        />
-        <circle
-          cx="50"
-          cy="50"
-          r="45"
-          stroke={color}
-          strokeWidth="8"
-          fill="transparent"
-          strokeDasharray={strokeDasharray}
-          strokeDashoffset={strokeDashoffset}
-          className="progress-circle"
-        />
-      </svg>
-      <div className="progress-content">
-        <div className="progress-value">{value}</div>
-        <div className="progress-label">{label}</div>
-      </div>
-    </div>
-  );
-};
+// API Configuration
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5002';
 
-const BarChart = ({ data, title }) => {
-  const maxValue = Math.max(...data.map(d => d.value));
-  
-  return (
-    <div className="bar-chart">
-      <h4 className="chart-title">{title}</h4>
-      <div className="bars-container">
-        {data.map((item, index) => (
-          <div key={index} className="bar-item">
-            <div className="bar-label">{item.label}</div>
-            <div className="bar">
-              <div 
-                className="bar-fill"
-                style={{ 
-                  height: `${(item.value / maxValue) * 100}%`,
-                  backgroundColor: item.color || '#b8396b'
-                }}
-              ></div>
-            </div>
-            <div className="bar-value">{item.value}</div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-};
-
-const TrendChart = ({ cycles }) => {
-  if (!cycles || cycles.length < 2) return null;
-  
-  const cycleLengths = [];
-  for (let i = 0; i < cycles.length - 1; i++) {
-    const start = new Date(cycles[i].startDate?.toDate ? cycles[i].startDate.toDate() : cycles[i].startDate);
-    const nextStart = new Date(cycles[i + 1].startDate?.toDate ? cycles[i + 1].startDate.toDate() : cycles[i + 1].startDate);
-    const length = Math.round((nextStart - start) / (1000 * 60 * 60 * 24));
-    cycleLengths.push({ cycle: i + 1, length });
-  }
-  
-  const maxLength = Math.max(...cycleLengths.map(c => c.length));
-  const minLength = Math.min(...cycleLengths.map(c => c.length));
-  
-  return (
-    <div className="trend-chart">
-      <h4 className="chart-title">Cycle Length Trend</h4>
-      <div className="trend-line">
-        {cycleLengths.map((point, index) => (
-          <div key={index} className="trend-point" style={{
-            left: `${(index / (cycleLengths.length - 1)) * 100}%`,
-            bottom: `${((point.length - minLength) / (maxLength - minLength)) * 80 + 10}%`
-          }}>
-            <div className="point" title={`Cycle ${point.cycle}: ${point.length} days`}></div>
-            <div className="point-label">{point.length}</div>
-          </div>
-        ))}
-      </div>
-      <div className="trend-axis">
-        <span>Cycle 1</span>
-        <span>Cycle {cycleLengths.length}</span>
-      </div>
-    </div>
-  );
-};
+// Register Chart.js components
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend,
+  ArcElement,
+  BarElement,
+  RadialLinearScale
+);
 
 const Analysis = () => {
   const [user, setUser] = useState(null);
-  const [userProfile, setUserProfile] = useState(null);
-  const [analysisMetrics, setAnalysisMetrics] = useState(null);
-  const [analysisHistory, setAnalysisHistory] = useState([]);
-  const [cycles, setCycles] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [calculating, setCalculating] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
-  const [showDetails, setShowDetails] = useState({});
+  const [userProfile, setUserProfile] = useState(null);
+  const [cycles, setCycles] = useState([]);
+  const [analysisMetrics, setAnalysisMetrics] = useState(null);
   const [modelPredictions, setModelPredictions] = useState(null);
-  const [predictionsLoading, setPredictionsLoading] = useState(false);
-  const [userFeatures, setUserFeatures] = useState({
-    // Personal Information
-    age: '',
-    bmi: '',
-    numberPregnancies: '',
-    numberAbortions: '',
-    ageAtFirstMenstruation: '',
-    currentlyBreastfeeding: false,
-    
-    // Cycle Information
-    avgCycleLength: '',
-    irregularCyclesPercent: '',
-    stdCycleLength: '',
-    avgLutealPhase: '',
-    shortLutealPercent: '',
-    avgMensesLength: '',
-    avgBleedingIntensity: '',
-    unusualBleedingPercent: '',
-    avgOvulationDay: '',
-    ovulationVariability: '',
-    totalCycles: ''
-  });
-  const [showUserForm, setShowUserForm] = useState(false);
+  const [analysisHistory, setAnalysisHistory] = useState([]);
+  const [calculating, setCalculating] = useState(false);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      if (currentUser) {
-        setUser(currentUser);
-        await loadUserData(currentUser.uid);
-      } else {
-        setUser(null);
-        setUserProfile(null);
-        setAnalysisMetrics(null);
-        setAnalysisHistory([]);
-      }
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
       setLoading(false);
+      if (currentUser) {
+        loadUserData(currentUser.uid);
+      }
     });
 
     return () => unsubscribe();
@@ -184,121 +85,76 @@ const Analysis = () => {
 
   const loadUserData = async (uid) => {
     try {
-      const [profile, analyses, cyclesData] = await Promise.all([
+      const [profile, userCycles, analyses] = await Promise.all([
         getUserProfile(uid),
-        getAnalyses(uid),
-        getCycles(uid)
+        getCycles(uid),
+        getAnalyses(uid)
       ]);
       
       setUserProfile(profile);
-      setAnalysisMetrics(profile?.analysisMetrics || null);
+      setCycles(userCycles || []);
       setAnalysisHistory(analyses || []);
-      setCycles(cyclesData || []);
+      
+      if (profile?.analysisMetrics) {
+        setAnalysisMetrics(profile.analysisMetrics);
+        await runModelPredictions(profile.analysisMetrics);
+      }
     } catch (error) {
       console.error('Error loading user data:', error);
     }
   };
 
-  const calculateMetrics = async () => {
+  const calculateMetricsFromBackend = async () => {
     if (!user || !userProfile) return;
     
     setCalculating(true);
     try {
-      // Get profile data
       const profile = userProfile.profile || {};
       
-      // Calculate cycle metrics from stored cycles
-      const completedCycles = cycles.filter(cycle => cycle.startDate && cycle.endDate);
+      const userData = {
+        age: parseFloat(profile.Age) || 25,
+        bmi: parseFloat(profile.BMI) || 22.0,
+        numberPregnancies: parseInt(profile.Numberpreg) || 0,
+        numberAbortions: parseInt(profile.Abortions) || 0,
+        ageAtFirstMenstruation: parseFloat(profile.AgeM) || 13,
+        currentlyBreastfeeding: profile.Breastfeeding || false
+      };
       
-      if (completedCycles.length < 2) {
+      const cyclesData = cycles.map(cycle => ({
+        startDate: cycle.startDate?.toDate ? cycle.startDate.toDate().toISOString() : cycle.startDate,
+        endDate: cycle.endDate?.toDate ? cycle.endDate.toDate().toISOString() : cycle.endDate,
+        intensity: cycle.intensity || 3
+      }));
+      
+      if (cyclesData.length < 2) {
         alert('Need at least 2 complete cycles to calculate metrics');
         setCalculating(false);
         return;
       }
-
-      // Calculate cycle lengths
-      const cycleLengths = [];
-      for (let i = 0; i < completedCycles.length - 1; i++) {
-        const start = new Date(completedCycles[i].startDate.toDate ? completedCycles[i].startDate.toDate() : completedCycles[i].startDate);
-        const nextStart = new Date(completedCycles[i + 1].startDate.toDate ? completedCycles[i + 1].startDate.toDate() : completedCycles[i + 1].startDate);
-        const length = Math.round((nextStart - start) / (1000 * 60 * 60 * 24));
-        cycleLengths.push(length);
-      }
-
-      const avgCycleLength = cycleLengths.reduce((a, b) => a + b, 0) / cycleLengths.length;
       
-      // Calculate standard deviation
-      const variance = cycleLengths.reduce((sum, length) => sum + Math.pow(length - avgCycleLength, 2), 0) / (cycleLengths.length - 1);
-      const stdCycleLength = Math.sqrt(variance);
-
-      // Calculate irregular cycles percentage (>7 days variation)
-      const irregularCycles = cycleLengths.filter(length => Math.abs(length - avgCycleLength) > 7).length;
-      const irregularCyclesPercent = (irregularCycles / cycleLengths.length) * 100;
-
-      // Calculate menses length
-      const mensesLengths = completedCycles.map(cycle => {
-        const start = new Date(cycle.startDate.toDate ? cycle.startDate.toDate() : cycle.startDate);
-        const end = new Date(cycle.endDate.toDate ? cycle.endDate.toDate() : cycle.endDate);
-        return Math.round((end - start) / (1000 * 60 * 60 * 24)) + 1;
+      const response = await fetch(`${API_BASE_URL}/api/calculate-metrics`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_data: userData, cycles: cyclesData })
       });
-      const avgMensesLength = mensesLengths.reduce((a, b) => a + b, 0) / mensesLengths.length;
-
-      // Calculate bleeding intensity
-      const intensityValues = completedCycles
-        .map(cycle => cycle.intensity)
-        .filter(intensity => intensity && intensity >= 1 && intensity <= 5);
-      const avgBleedingIntensity = intensityValues.length > 0 
-        ? intensityValues.reduce((a, b) => a + b, 0) / intensityValues.length 
-        : 0;
-
-      // Calculate unusual bleeding percentage
-      const unusualBleeding = completedCycles.filter(cycle => {
-        const mensesLength = Math.round((new Date(cycle.endDate.toDate ? cycle.endDate.toDate() : cycle.endDate) - new Date(cycle.startDate.toDate ? cycle.startDate.toDate() : cycle.startDate)) / (1000 * 60 * 60 * 24)) + 1;
-        return mensesLength < 3 || mensesLength > 7 || (cycle.intensity && cycle.intensity >= 4);
-      }).length;
-      const unusualBleedingPercent = (unusualBleeding / completedCycles.length) * 100;
-
-      // Estimate luteal phase and ovulation metrics
-      const avgLutealPhase = 14; // Standard assumption
-      const avgOvulationDay = avgCycleLength - avgLutealPhase;
-      const ovulationVariability = stdCycleLength; // Simplified
-      const shortLutealPercent = 0; // Would need ovulation tracking data
-
-      const metrics = {
-        // Calculated metrics
-        avgCycleLength: parseFloat(avgCycleLength.toFixed(1)),
-        avgCycleLengthPercent: parseFloat(((stdCycleLength / avgCycleLength) * 100).toFixed(1)),
-        irregularCyclesPercent: parseFloat(irregularCyclesPercent.toFixed(1)),
-        stdCycleLength: parseFloat(stdCycleLength.toFixed(1)),
-        avgLutealPhase: avgLutealPhase,
-        shortLutealPercent: shortLutealPercent,
-        avgBleedingIntensity: parseFloat(avgBleedingIntensity.toFixed(1)),
-        unusualBleedingPercent: parseFloat(unusualBleedingPercent.toFixed(1)),
-        avgMensesLength: parseFloat(avgMensesLength.toFixed(1)),
-        avgOvulationDay: parseFloat(avgOvulationDay.toFixed(1)),
-        ovulationVariability: parseFloat(ovulationVariability.toFixed(1)),
-        totalCycles: completedCycles.length,
+      
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        const calculatedMetrics = data.calculated_metrics;
+        await saveAnalysisMetrics(user.uid, calculatedMetrics);
+        setAnalysisMetrics(calculatedMetrics);
         
-        // Profile data
-        age: parseFloat(profile.Age) || 0,
-        bmi: parseFloat(profile.BMI) || 0,
-        numberPregnancies: parseInt(profile.Numberpreg) || 0,
-        numberAbortions: parseInt(profile.Abortions) || 0,
-        ageAtFirstMenstruation: parseFloat(profile.AgeM) || 0,
-        currentlyBreastfeeding: profile.Breastfeeding || false
-      };
-
-      // Save to database
-      await saveAnalysisMetrics(user.uid, metrics);
-      setAnalysisMetrics(metrics);
-      
-      // Run model predictions
-      await runModelPredictions(metrics);
-      
-      // Reload analysis history
-      const updatedAnalyses = await getAnalyses(user.uid);
-      setAnalysisHistory(updatedAnalyses);
-      
+        if (data.model_predictions && !data.model_predictions.error) {
+          setModelPredictions(data.model_predictions);
+          await saveAnalysisToDatabase(calculatedMetrics, data.model_predictions);
+        }
+        
+        const updatedAnalyses = await getAnalyses(user.uid);
+        setAnalysisHistory(updatedAnalyses);
+      }
     } catch (error) {
       console.error('Error calculating metrics:', error);
       alert('Error calculating metrics. Please try again.');
@@ -307,82 +163,11 @@ const Analysis = () => {
     }
   };
 
-  const handleFeatureChange = (field, value) => {
-    setUserFeatures(prev => ({
-      ...prev,
-      [field]: value
-    }));
-  };
-
-  const runDirectModelPredictions = async () => {
-    setPredictionsLoading(true);
-    try {
-      // Prepare features for all three models
-      const features = {
-        // Risk Assessment Model Features
-        AvgCycleLength: parseFloat(userFeatures.avgCycleLength) || 28,
-        IrregularCyclesPercent: parseFloat(userFeatures.irregularCyclesPercent) || 0,
-        StdCycleLength: parseFloat(userFeatures.stdCycleLength) || 2,
-        AvgLutealPhase: parseFloat(userFeatures.avgLutealPhase) || 14,
-        ShortLutealPercent: parseFloat(userFeatures.shortLutealPercent) || 0,
-        AvgBleedingIntensity: parseFloat(userFeatures.avgBleedingIntensity) || 3,
-        UnusualBleedingPercent: parseFloat(userFeatures.unusualBleedingPercent) || 0,
-        AvgMensesLength: parseFloat(userFeatures.avgMensesLength) || 5,
-        AvgOvulationDay: parseFloat(userFeatures.avgOvulationDay) || 14,
-        OvulationVariability: parseFloat(userFeatures.ovulationVariability) || 1,
-        Age: parseFloat(userFeatures.age) || 25,
-        BMI: parseFloat(userFeatures.bmi) || 22,
-        TotalCycles: parseFloat(userFeatures.totalCycles) || 12,
-        
-        // PRWI Model Additional Features
-        Numberpreg: parseFloat(userFeatures.numberPregnancies) || 0,
-        Abortions: parseFloat(userFeatures.numberAbortions) || 0,
-        AgeM: parseFloat(userFeatures.ageAtFirstMenstruation) || 13,
-        Breastfeeding: userFeatures.currentlyBreastfeeding ? 1 : 0
-      };
-
-      console.log('Sending user features to models:', features);
-
-      const response = await fetch('http://localhost:5002/api/predict', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          features: features,
-          models: ['all']
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      console.log('Model predictions received:', data);
-
-      if (data.success) {
-        setModelPredictions(data.results);
-      } else {
-        console.error('Model prediction failed:', data.error);
-        setModelPredictions({ error: data.error });
-      }
-    } catch (error) {
-      console.error('Error running model predictions:', error);
-      setModelPredictions({ error: error.message });
-    } finally {
-      setPredictionsLoading(false);
-    }
-  };
-
   const runModelPredictions = async (metrics) => {
     if (!metrics) return;
     
-    setPredictionsLoading(true);
     try {
-      // Prepare features for all three models
       const features = {
-        // Risk Assessment Model Features
         AvgCycleLength: metrics.avgCycleLength,
         IrregularCyclesPercent: metrics.irregularCyclesPercent,
         StdCycleLength: metrics.stdCycleLength,
@@ -396,45 +181,54 @@ const Analysis = () => {
         Age: metrics.age,
         BMI: metrics.bmi,
         TotalCycles: metrics.totalCycles,
-        
-        // PRWI Model Additional Features
         Numberpreg: metrics.numberPregnancies,
         Abortions: metrics.numberAbortions,
         AgeM: metrics.ageAtFirstMenstruation,
         Breastfeeding: metrics.currentlyBreastfeeding ? 1 : 0
       };
 
-      console.log('Sending features to models:', features);
-
-      const response = await fetch('http://localhost:5002/api/predict', {
+      const response = await fetch(`${API_BASE_URL}/api/predict`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          features: features,
-          models: ['all']
-        })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ features: features, models: ['all'] })
       });
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
 
       const data = await response.json();
-      console.log('Model predictions received:', data);
 
       if (data.success) {
         setModelPredictions(data.results);
-      } else {
-        console.error('Model prediction failed:', data.error);
-        setModelPredictions({ error: data.error });
+        return data.results;
       }
     } catch (error) {
       console.error('Error running model predictions:', error);
-      setModelPredictions({ error: error.message });
-    } finally {
-      setPredictionsLoading(false);
+    }
+  };
+
+  const saveAnalysisToDatabase = async (metrics, predictions) => {
+    if (!user || !metrics) return;
+    
+    try {
+      const analysisData = {
+        inputFeatures: { ...metrics, calculatedAt: new Date().toISOString() },
+        modelsRun: ['risk_assessment', 'prwi_score', 'clusterdev'],
+        riskCategory: predictions.risk_assessment?.risk_level || null,
+        riskProbabilities: predictions.risk_assessment?.probabilities || null,
+        prwiScore: predictions.prwi_score?.prwi_score || null,
+        clusterLabel: predictions.clusterdev?.cluster || null,
+        deviationScore: predictions.clusterdev?.deviation_score || null,
+        recommendations: [
+          predictions.risk_assessment?.interpretation,
+          predictions.prwi_score?.interpretation,
+          predictions.clusterdev?.interpretation
+        ].filter(Boolean),
+        confidence: 'high'
+      };
+      
+      await addAnalysis(user.uid, analysisData);
+    } catch (error) {
+      console.error('Error saving analysis to database:', error);
     }
   };
 
@@ -442,7 +236,6 @@ const Analysis = () => {
     if (!analysisMetrics) return 0;
     let score = 100;
     
-    // Deduct points for irregularities
     if (analysisMetrics.irregularCyclesPercent > 20) score -= 20;
     if (analysisMetrics.avgCycleLength < 21 || analysisMetrics.avgCycleLength > 35) score -= 15;
     if (analysisMetrics.avgBleedingIntensity > 4) score -= 10;
@@ -453,802 +246,1038 @@ const Analysis = () => {
 
   if (loading) {
     return (
-      <div className="analysis-container">
-        <div className="loading-spinner">Loading...</div>
+      <div className="analysis-loading">
+        <motion.div 
+          className="loading-content"
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.6 }}
+        >
+          <Sparkles size={48} className="sparkle-icon" />
+          <h2>Loading Your Dashboard</h2>
+          <p>Preparing your personalized health insights...</p>
+        </motion.div>
       </div>
     );
   }
 
   if (!user) {
     return (
-      <div className="analysis-container">
-        <div className="no-user">Please log in to view analysis.</div>
+      <div className="auth-required">
+        <motion.div 
+          className="auth-content"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6 }}
+        >
+          <Shield size={64} className="auth-icon" />
+          <h2>Sign In Required</h2>
+          <p>Please sign in to access your personalized health dashboard</p>
+        </motion.div>
       </div>
     );
   }
 
   return (
-    <div className="analysis-container">
-      <div className="analysis-header">
-        <h1 className="analysis-title">
-          <BarChart3 size={32} />
-          Menstrual Health Analysis
-        </h1>
-        <p className="analysis-subtitle">
-          Comprehensive insights into your menstrual wellness patterns
-        </p>
-      </div>
-
-      {/* Dashboard Tabs */}
-      <div className="dashboard-tabs">
-        <button 
-          className={`tab-btn ${activeTab === 'overview' ? 'active' : ''}`}
-          onClick={() => setActiveTab('overview')}
-        >
-          <PieChart size={18} />
-          Overview
-        </button>
-        <button 
-          className={`tab-btn ${activeTab === 'trends' ? 'active' : ''}`}
-          onClick={() => setActiveTab('trends')}
-        >
-          <LineChart size={18} />
-          Trends
-        </button>
-        <button 
-          className={`tab-btn ${activeTab === 'metrics' ? 'active' : ''}`}
-          onClick={() => setActiveTab('metrics')}
-        >
-          <Target size={18} />
-          Detailed Metrics
-        </button>
-        <button 
-          className={`tab-btn ${activeTab === 'history' ? 'active' : ''}`}
-          onClick={() => setActiveTab('history')}
-        >
-          <Clock size={18} />
-          History
-        </button>
-      </div>
-
-      {/* Calculate Metrics Section */}
-      <div className="quick-actions">
-        <button 
-          className="calculate-btn"
-          onClick={calculateMetrics}
-          disabled={calculating || cycles.length < 2}
-        >
-          {calculating ? (
-            <>
-              <RefreshCw size={18} className="spinning" />
-              Calculating...
-            </>
-          ) : (
-            <>
-              <Calculator size={18} />
-              Calculate Metrics
-            </>
-          )}
-        </button>
-        
-        <button 
-          className="user-input-btn"
-          onClick={() => setShowUserForm(!showUserForm)}
-        >
-          <User size={18} />
-          {showUserForm ? 'Hide' : 'Manual'} Input
-        </button>
-        
-        {cycles.length < 2 && (
-          <div className="warning-message">
-            <AlertCircle size={16} />
-            Need at least 2 cycles for analysis
-          </div>
-        )}
-      </div>
-
-      {/* User Input Form */}
-      {showUserForm && (
-        <div className="user-input-form">
-          <div className="form-header">
-            <h3>
-              <User size={24} />
-              Manual Feature Input
-            </h3>
-            <p>Enter your information to get AI predictions directly</p>
-          </div>
-          
-          <div className="form-sections">
-            {/* Personal Information */}
-            <div className="form-section">
-              <h4>
-                <User size={20} />
-                Personal Information
-              </h4>
-              <div className="form-grid">
-                <div className="form-field">
-                  <label>Age (years)</label>
-                  <input
-                    type="number"
-                    value={userFeatures.age}
-                    onChange={(e) => handleFeatureChange('age', e.target.value)}
-                    placeholder="25"
-                    min="12"
-                    max="60"
-                  />
-                </div>
-                <div className="form-field">
-                  <label>BMI</label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    value={userFeatures.bmi}
-                    onChange={(e) => handleFeatureChange('bmi', e.target.value)}
-                    placeholder="22.5"
-                    min="15"
-                    max="40"
-                  />
-                </div>
-                <div className="form-field">
-                  <label>Number of Pregnancies</label>
-                  <input
-                    type="number"
-                    value={userFeatures.numberPregnancies}
-                    onChange={(e) => handleFeatureChange('numberPregnancies', e.target.value)}
-                    placeholder="0"
-                    min="0"
-                    max="10"
-                  />
-                </div>
-                <div className="form-field">
-                  <label>Number of Abortions</label>
-                  <input
-                    type="number"
-                    value={userFeatures.numberAbortions}
-                    onChange={(e) => handleFeatureChange('numberAbortions', e.target.value)}
-                    placeholder="0"
-                    min="0"
-                    max="10"
-                  />
-                </div>
-                <div className="form-field">
-                  <label>Age at First Menstruation</label>
-                  <input
-                    type="number"
-                    value={userFeatures.ageAtFirstMenstruation}
-                    onChange={(e) => handleFeatureChange('ageAtFirstMenstruation', e.target.value)}
-                    placeholder="13"
-                    min="8"
-                    max="18"
-                  />
-                </div>
-                <div className="form-field checkbox-field">
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={userFeatures.currentlyBreastfeeding}
-                      onChange={(e) => handleFeatureChange('currentlyBreastfeeding', e.target.checked)}
-                    />
-                    Currently Breastfeeding
-                  </label>
-                </div>
-              </div>
-            </div>
-
-            {/* Cycle Information */}
-            <div className="form-section">
-              <h4>
-                <Calendar size={20} />
-                Cycle Information
-              </h4>
-              <div className="form-grid">
-                <div className="form-field">
-                  <label>Average Cycle Length (days)</label>
-                  <input
-                    type="number"
-                    value={userFeatures.avgCycleLength}
-                    onChange={(e) => handleFeatureChange('avgCycleLength', e.target.value)}
-                    placeholder="28"
-                    min="20"
-                    max="40"
-                  />
-                </div>
-                <div className="form-field">
-                  <label>Irregular Cycles (%)</label>
-                  <input
-                    type="number"
-                    value={userFeatures.irregularCyclesPercent}
-                    onChange={(e) => handleFeatureChange('irregularCyclesPercent', e.target.value)}
-                    placeholder="10"
-                    min="0"
-                    max="100"
-                  />
-                </div>
-                <div className="form-field">
-                  <label>Cycle Length Variation (days)</label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    value={userFeatures.stdCycleLength}
-                    onChange={(e) => handleFeatureChange('stdCycleLength', e.target.value)}
-                    placeholder="2.5"
-                    min="0"
-                    max="10"
-                  />
-                </div>
-                <div className="form-field">
-                  <label>Average Luteal Phase (days)</label>
-                  <input
-                    type="number"
-                    value={userFeatures.avgLutealPhase}
-                    onChange={(e) => handleFeatureChange('avgLutealPhase', e.target.value)}
-                    placeholder="14"
-                    min="8"
-                    max="20"
-                  />
-                </div>
-                <div className="form-field">
-                  <label>Short Luteal Phase (%)</label>
-                  <input
-                    type="number"
-                    value={userFeatures.shortLutealPercent}
-                    onChange={(e) => handleFeatureChange('shortLutealPercent', e.target.value)}
-                    placeholder="0"
-                    min="0"
-                    max="100"
-                  />
-                </div>
-                <div className="form-field">
-                  <label>Average Menstruation Length (days)</label>
-                  <input
-                    type="number"
-                    value={userFeatures.avgMensesLength}
-                    onChange={(e) => handleFeatureChange('avgMensesLength', e.target.value)}
-                    placeholder="5"
-                    min="2"
-                    max="10"
-                  />
-                </div>
-                <div className="form-field">
-                  <label>Bleeding Intensity (1-5)</label>
-                  <input
-                    type="number"
-                    value={userFeatures.avgBleedingIntensity}
-                    onChange={(e) => handleFeatureChange('avgBleedingIntensity', e.target.value)}
-                    placeholder="3"
-                    min="1"
-                    max="5"
-                  />
-                </div>
-                <div className="form-field">
-                  <label>Unusual Bleeding (%)</label>
-                  <input
-                    type="number"
-                    value={userFeatures.unusualBleedingPercent}
-                    onChange={(e) => handleFeatureChange('unusualBleedingPercent', e.target.value)}
-                    placeholder="5"
-                    min="0"
-                    max="100"
-                  />
-                </div>
-                <div className="form-field">
-                  <label>Average Ovulation Day</label>
-                  <input
-                    type="number"
-                    value={userFeatures.avgOvulationDay}
-                    onChange={(e) => handleFeatureChange('avgOvulationDay', e.target.value)}
-                    placeholder="14"
-                    min="8"
-                    max="25"
-                  />
-                </div>
-                <div className="form-field">
-                  <label>Ovulation Variability (days)</label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    value={userFeatures.ovulationVariability}
-                    onChange={(e) => handleFeatureChange('ovulationVariability', e.target.value)}
-                    placeholder="1.5"
-                    min="0"
-                    max="10"
-                  />
-                </div>
-                <div className="form-field">
-                  <label>Total Cycles Tracked</label>
-                  <input
-                    type="number"
-                    value={userFeatures.totalCycles}
-                    onChange={(e) => handleFeatureChange('totalCycles', e.target.value)}
-                    placeholder="12"
-                    min="1"
-                    max="100"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-          
-          <div className="form-actions">
-            <button 
-              className="predict-btn"
-              onClick={runDirectModelPredictions}
-              disabled={predictionsLoading}
+    <div className="analysis-dashboard">
+      {/* Hero Header */}
+      <motion.header 
+        className="hero-header"
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6 }}
+      >
+        <div className="hero-content">
+          <div className="hero-left">
+            <motion.div 
+              className="hero-icon"
+              animate={{ rotate: [0, 5, -5, 0] }}
+              transition={{ duration: 3, repeat: Infinity }}
             >
-              {predictionsLoading ? (
+              <Heart size={48} />
+            </motion.div>
+            <div className="hero-text">
+              <h1>AI Health Dashboard</h1>
+              <p>Your personal menstrual wellness companion</p>
+            </div>
+          </div>
+          
+          <div className="hero-right">
+            <div className="hero-stats">
+              <div className="stat-pill">
+                <Calendar size={18} />
+                <span>{cycles.length} Cycles</span>
+              </div>
+              <div className="stat-pill">
+                <Brain size={18} />
+                <span>{analysisHistory.length} Analyses</span>
+              </div>
+            </div>
+            
+            <motion.button 
+              className="analyze-button"
+              onClick={calculateMetricsFromBackend}
+              disabled={calculating || cycles.length < 2}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+            >
+              {calculating ? (
                 <>
-                  <RefreshCw size={18} className="spinning" />
-                  Getting Predictions...
+                  <RefreshCw size={20} className="spinning" />
+                  Analyzing...
                 </>
               ) : (
                 <>
-                  <Brain size={18} />
-                  Get AI Predictions
+                  <Zap size={20} />
+                  Run Analysis
                 </>
               )}
-            </button>
+            </motion.button>
           </div>
         </div>
-      )}
+      </motion.header>
 
-      {/* Dashboard Content */}
-      <div className="dashboard-content">
-        {/* Overview Tab */}
-        {activeTab === 'overview' && analysisMetrics && (
-          <div className="overview-section">
-            {/* Key Metrics Cards */}
-            <div className="key-metrics-grid">
-              <div className="key-metric-card">
-                <div className="metric-icon cycle-icon">
-                  <Calendar size={24} />
-                </div>
-                <div className="metric-info">
-                  <div className="metric-value">{analysisMetrics.avgCycleLength}</div>
-                  <div className="metric-label">Avg Cycle (days)</div>
-                  <div className="metric-status">
-                    {analysisMetrics.avgCycleLength >= 21 && analysisMetrics.avgCycleLength <= 35 ? 
-                      <CheckCircle size={16} className="status-good" /> : 
-                      <AlertCircle size={16} className="status-warning" />
-                    }
-                  </div>
-                </div>
-              </div>
+      {/* Navigation */}
+      <motion.nav 
+        className="main-navigation"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.6, delay: 0.2 }}
+      >
+        {[
+          { id: 'overview', label: 'Overview & AI Insights', icon: Brain },
+          { id: 'trends', label: 'Trends', icon: TrendingUp },
+          { id: 'metrics', label: 'Metrics', icon: BarChart3 },
+          { id: 'history', label: 'History', icon: Clock }
+        ].map((tab) => {
+          const Icon = tab.icon;
+          return (
+            <motion.button
+              key={tab.id}
+              className={`nav-item ${activeTab === tab.id ? 'active' : ''}`}
+              onClick={() => setActiveTab(tab.id)}
+              whileHover={{ y: -2 }}
+              whileTap={{ scale: 0.95 }}
+            >
+              <Icon size={20} />
+              <span>{tab.label}</span>
+            </motion.button>
+          );
+        })}
+      </motion.nav>
 
-              <div className="key-metric-card">
-                <div className="metric-icon bleeding-icon">
-                  <Droplet size={24} />
-                </div>
-                <div className="metric-info">
-                  <div className="metric-value">{analysisMetrics.avgBleedingIntensity}/5</div>
-                  <div className="metric-label">Bleeding Intensity</div>
-                  <div className="metric-status">
-                    {analysisMetrics.avgBleedingIntensity <= 3 ? 
-                      <CheckCircle size={16} className="status-good" /> : 
-                      <AlertCircle size={16} className="status-warning" />
-                    }
-                  </div>
-                </div>
-              </div>
+      {/* Main Content */}
+      <div className="main-content">
+        <AnimatePresence mode="wait">
+          {/* Overview Tab */}
+          {activeTab === 'overview' && (
+            <motion.div
+              key="overview"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.4 }}
+              className="tab-content"
+            >
+              {analysisMetrics ? (
+                <div className="overview-grid">
+                  {/* Overall Health Score Card - Using PRWI Wellness Score */}
+                  <motion.div 
+                    className="score-card featured"
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: 0.1 }}
+                  >
+                    <div className="card-header">
+                      <Award size={24} />
+                      <h3>Overall Health Score</h3>
+                    </div>
+                    <div className="score-display">
+                      <div className="score-circle">
+                        <svg viewBox="0 0 120 120">
+                          <circle cx="60" cy="60" r="54" fill="none" stroke="#f0f0f0" strokeWidth="8" />
+                          <circle 
+                            cx="60" cy="60" r="54" fill="none" 
+                            stroke={modelPredictions?.prwi_score?.prwi_score >= 80 ? '#10B981' : modelPredictions?.prwi_score?.prwi_score >= 60 ? '#F59E0B' : '#EF4444'}
+                            strokeWidth="8"
+                            strokeDasharray={`${2 * Math.PI * 54 * (modelPredictions?.prwi_score?.prwi_score || 0) / 100} ${2 * Math.PI * 54}`}
+                            strokeLinecap="round"
+                            transform="rotate(-90 60 60)"
+                          />
+                        </svg>
+                        <div className="score-value">{modelPredictions?.prwi_score?.prwi_score?.toFixed(0) || '--'}</div>
+                      </div>
+                      <div className="score-label">
+                        {modelPredictions?.prwi_score?.prwi_score >= 80 ? 'Excellent' : modelPredictions?.prwi_score?.prwi_score >= 60 ? 'Good' : modelPredictions?.prwi_score?.prwi_score ? 'Needs Attention' : 'Run Analysis'}
+                      </div>
+                    </div>
+                  </motion.div>
 
-              <div className="key-metric-card">
-                <div className="metric-icon regularity-icon">
-                  <Activity size={24} />
-                </div>
-                <div className="metric-info">
-                  <div className="metric-value">{analysisMetrics.irregularCyclesPercent.toFixed(0)}%</div>
-                  <div className="metric-label">Irregular Cycles</div>
-                  <div className="metric-status">
-                    {analysisMetrics.irregularCyclesPercent < 20 ? 
-                      <CheckCircle size={16} className="status-good" /> : 
-                      <AlertCircle size={16} className="status-warning" />
-                    }
-                  </div>
-                </div>
-              </div>
+                  {/* Quick Metrics */}
+                  <motion.div 
+                    className="metric-card"
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: 0.2 }}
+                  >
+                    <div className="metric-icon cycle">
+                      <Calendar size={24} />
+                    </div>
+                    <div className="metric-info">
+                      <div className="metric-value">{analysisMetrics.avgCycleLength}</div>
+                      <div className="metric-label">Avg Cycle Length (days)</div>
+                      <div className={`metric-status ${analysisMetrics.avgCycleLength >= 21 && analysisMetrics.avgCycleLength <= 35 ? 'good' : 'warning'}`}>
+                        {analysisMetrics.avgCycleLength >= 21 && analysisMetrics.avgCycleLength <= 35 ? 'Normal Range' : 'Outside Range'}
+                      </div>
+                    </div>
+                  </motion.div>
 
-              <div className="key-metric-card">
-                <div className="metric-icon cycles-icon">
-                  <BarChart3 size={24} />
-                </div>
-                <div className="metric-info">
-                  <div className="metric-value">{analysisMetrics.totalCycles}</div>
-                  <div className="metric-label">Cycles Tracked</div>
-                  <div className="metric-status">
-                    <CheckCircle size={16} className="status-good" />
-                  </div>
-                </div>
-              </div>
-            </div>
+                  <motion.div 
+                    className="metric-card"
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: 0.3 }}
+                  >
+                    <div className="metric-icon regularity">
+                      <Activity size={24} />
+                    </div>
+                    <div className="metric-info">
+                      <div className="metric-value">{(100 - analysisMetrics.irregularCyclesPercent).toFixed(0)}%</div>
+                      <div className="metric-label">Cycle Regularity</div>
+                      <div className={`metric-status ${analysisMetrics.irregularCyclesPercent < 20 ? 'good' : 'warning'}`}>
+                        {analysisMetrics.irregularCyclesPercent < 20 ? 'Highly Regular' : 'Variable'}
+                      </div>
+                    </div>
+                  </motion.div>
 
-            {/* Debug Section - Remove this after fixing */}
-            <div style={{background: '#f0f0f0', padding: '10px', margin: '10px 0', borderRadius: '5px'}}>
-              <h4>🐛 Debug Info</h4>
-              <p>modelPredictions exists: {modelPredictions ? 'YES' : 'NO'}</p>
-              <p>predictionsLoading: {predictionsLoading ? 'YES' : 'NO'}</p>
-              {modelPredictions && (
-                <pre style={{fontSize: '12px', overflow: 'auto'}}>
-                  {JSON.stringify(modelPredictions, null, 2)}
-                </pre>
+                  <motion.div 
+                    className="metric-card"
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: 0.4 }}
+                  >
+                    <div className="metric-icon flow">
+                      <Droplet size={24} />
+                    </div>
+                    <div className="metric-info">
+                      <div className="metric-value">{analysisMetrics.avgBleedingIntensity.toFixed(1)}/5</div>
+                      <div className="metric-label">Avg Flow Intensity</div>
+                      <div className={`metric-status ${analysisMetrics.avgBleedingIntensity >= 2 && analysisMetrics.avgBleedingIntensity <= 4 ? 'good' : 'warning'}`}>
+                        {analysisMetrics.avgBleedingIntensity >= 2 && analysisMetrics.avgBleedingIntensity <= 4 ? 'Normal' : 'Atypical'}
+                      </div>
+                    </div>
+                  </motion.div>
+
+                  {/* Cluster Pattern Card */}
+                  {modelPredictions?.clusterdev && !modelPredictions.clusterdev.error && (
+                    <motion.div 
+                      className="metric-card"
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ delay: 0.5 }}
+                    >
+                      <div className="metric-icon" style={{ background: 'linear-gradient(135deg, var(--pastel-peach), var(--pastel-purple))' }}>
+                        <PieChart size={24} />
+                      </div>
+                      <div className="metric-info">
+                        <div className="metric-value">Group {modelPredictions.clusterdev.cluster}</div>
+                        <div className="metric-label">Health Pattern</div>
+                        <div className="metric-status good">
+                          {(100 - modelPredictions.clusterdev.deviation_score).toFixed(0)}% Similar
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </div>
+              ) : null}
+
+              {/* AI Insights Section */}
+              {modelPredictions ? (
+                <div className="insights-grid" style={{ marginTop: '30px' }}>
+                  {/* Risk Assessment */}
+                  {modelPredictions.risk_assessment && !modelPredictions.risk_assessment.error && (
+                    <motion.div 
+                      className="insight-card risk"
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 0.5 }}
+                    >
+                      <div className="card-badge">Risk Assessment</div>
+                      <div className="card-body">
+                        <div className="insight-header">
+                          <Shield size={32} />
+                          <div className={`risk-level ${modelPredictions.risk_assessment.risk_level?.toLowerCase()}`}>
+                            {modelPredictions.risk_assessment.risk_level} Risk
+                          </div>
+                        </div>
+                        <div className="insight-chart">
+                          <RiskChart probabilities={modelPredictions.risk_assessment.probabilities} />
+                        </div>
+                        <div className="insight-text">
+                          <p>{modelPredictions.risk_assessment.interpretation}</p>
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+
+                  {/* Pattern Analysis - Cluster Data */}
+                  {modelPredictions.clusterdev && !modelPredictions.clusterdev.error && (
+                    <motion.div 
+                      className="insight-card pattern"
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 0.6 }}
+                    >
+                      <div className="card-badge">Health Pattern Cluster</div>
+                      <div className="card-body">
+                        <div className="insight-header">
+                          <PieChart size={32} />
+                          <div className="cluster-label">Group {modelPredictions.clusterdev.cluster}</div>
+                        </div>
+                        <div className="pattern-stats">
+                          <div className="stat-item">
+                            <span className="stat-label">Similarity</span>
+                            <span className="stat-value">{(100 - modelPredictions.clusterdev.deviation_score).toFixed(1)}%</span>
+                          </div>
+                          <div className="stat-item">
+                            <span className="stat-label">Deviation Score</span>
+                            <span className="stat-value">{modelPredictions.clusterdev.deviation_score?.toFixed(2)}</span>
+                          </div>
+                        </div>
+                        <div className="insight-text">
+                          <p>{modelPredictions.clusterdev.interpretation}</p>
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </div>
+              ) : null}
+
+              {/* Empty State - Only show if no data at all */}
+              {!analysisMetrics && !modelPredictions && (
+                <div className="empty-state">
+                  <Brain size={64} />
+                  <h3>No Data Available</h3>
+                  <p>Run an analysis to see your health overview and AI insights</p>
+                  <button 
+                    className="primary-btn"
+                    onClick={calculateMetricsFromBackend}
+                    disabled={calculating || cycles.length < 2}
+                  >
+                    {calculating ? 'Analyzing...' : 'Run First Analysis'}
+                  </button>
+                </div>
               )}
-            </div>
+            </motion.div>
+          )}
 
-            {/* Model Predictions Section */}
-            {modelPredictions && (
-              <div className="model-predictions-section">
-                <h3 className="predictions-title">
-                  <Brain size={24} />
-                  AI Model Predictions
-                </h3>
-                
-                {predictionsLoading ? (
-                  <div className="predictions-loading">
-                    <RefreshCw size={20} className="spinning" />
-                    Running AI Analysis...
-                  </div>
-                ) : (
-                  <div className="predictions-grid">
-                    {/* Risk Assessment */}
-                    {modelPredictions.risk_assessment && !modelPredictions.risk_assessment.error && (
-                      <div className="prediction-card risk-card">
-                        <div className="prediction-header">
-                          <div className="prediction-icon risk-icon">
-                            <AlertCircle size={24} />
-                          </div>
-                          <div className="prediction-info">
-                            <div className="prediction-title">Risk Assessment</div>
-                            <div className={`prediction-value risk-${modelPredictions.risk_assessment.risk_level?.toLowerCase()}`}>
-                              {modelPredictions.risk_assessment.risk_level} Risk
-                            </div>
-                          </div>
-                        </div>
-                        <div className="prediction-details">
-                          {modelPredictions.risk_assessment.probabilities && (
-                            <div className="risk-probabilities">
-                              <div className="prob-item">
-                                <span>Low:</span> {(modelPredictions.risk_assessment.probabilities.low * 100).toFixed(1)}%
-                              </div>
-                              <div className="prob-item">
-                                <span>Medium:</span> {(modelPredictions.risk_assessment.probabilities.medium * 100).toFixed(1)}%
-                              </div>
-                              <div className="prob-item">
-                                <span>High:</span> {(modelPredictions.risk_assessment.probabilities.high * 100).toFixed(1)}%
-                              </div>
-                            </div>
-                          )}
-                          <div className="prediction-interpretation">
-                            {modelPredictions.risk_assessment.interpretation}
-                          </div>
-                        </div>
-                      </div>
-                    )}
+          {/* Trends Tab */}
+          {activeTab === 'trends' && (
+            <motion.div
+              key="trends"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.4 }}
+              className="tab-content"
+            >
+              {analysisMetrics && cycles.length >= 2 ? (
+                <div className="trends-grid">
+                  {/* Cycle Length Trend */}
+                  <motion.div 
+                    className="chart-card large"
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.1 }}
+                  >
+                    <h3>Cycle Length Trend Over Time</h3>
+                    <div className="chart-wrapper">
+                      <CycleTrendChart cycles={cycles} />
+                    </div>
+                  </motion.div>
 
-                    {/* PRWI Score */}
-                    {modelPredictions.prwi_score && !modelPredictions.prwi_score.error && (
-                      <div className="prediction-card prwi-card">
-                        <div className="prediction-header">
-                          <div className="prediction-icon prwi-icon">
-                            <Target size={24} />
-                          </div>
-                          <div className="prediction-info">
-                            <div className="prediction-title">PRWI Score</div>
-                            <div className="prediction-value">
-                              {modelPredictions.prwi_score.prwi_score?.toFixed(2)}
-                            </div>
-                          </div>
-                        </div>
-                        <div className="prediction-details">
-                          <div className="prediction-interpretation">
-                            {modelPredictions.prwi_score.interpretation}
-                          </div>
-                        </div>
-                      </div>
-                    )}
+                  {/* Menses Duration Trend */}
+                  <motion.div 
+                    className="chart-card"
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.2 }}
+                  >
+                    <h3>Menses Duration Trend</h3>
+                    <div className="chart-wrapper">
+                      <MensesDurationChart cycles={cycles} />
+                    </div>
+                  </motion.div>
 
-                    {/* Cluster Deviation */}
-                    {modelPredictions.clusterdev && !modelPredictions.clusterdev.error && (
-                      <div className="prediction-card cluster-card">
-                        <div className="prediction-header">
-                          <div className="prediction-icon cluster-icon">
-                            <Activity size={24} />
-                          </div>
-                          <div className="prediction-info">
-                            <div className="prediction-title">Pattern Analysis</div>
-                            <div className="prediction-value">
-                              Cluster {modelPredictions.clusterdev.cluster}
-                            </div>
-                          </div>
-                        </div>
-                        <div className="prediction-details">
-                          <div className="deviation-score">
-                            Deviation Score: {modelPredictions.clusterdev.deviation_score?.toFixed(1)}%
-                          </div>
-                          <div className="prediction-interpretation">
-                            {modelPredictions.clusterdev.interpretation}
-                          </div>
-                        </div>
-                      </div>
-                    )}
+                  {/* Flow Intensity */}
+                  <motion.div 
+                    className="chart-card"
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.3 }}
+                  >
+                    <h3>Flow Intensity Distribution</h3>
+                    <div className="chart-wrapper">
+                      <FlowIntensityChart cycles={cycles} />
+                    </div>
+                  </motion.div>
 
-                    {/* Error Display */}
-                    {modelPredictions.error && (
-                      <div className="prediction-error">
-                        <AlertCircle size={20} />
-                        <span>Model Error: {modelPredictions.error}</span>
-                      </div>
-                    )}
-                    
-                    {/* Individual Model Errors */}
-                    {modelPredictions.risk_assessment?.error && (
-                      <div className="prediction-error">
-                        <AlertCircle size={20} />
-                        <span>Risk Assessment Error: {modelPredictions.risk_assessment.error}</span>
-                      </div>
-                    )}
-                    {modelPredictions.prwi_score?.error && (
-                      <div className="prediction-error">
-                        <AlertCircle size={20} />
-                        <span>PRWI Error: {modelPredictions.prwi_score.error}</span>
-                      </div>
-                    )}
-                    {modelPredictions.clusterdev?.error && (
-                      <div className="prediction-error">
-                        <AlertCircle size={20} />
-                        <span>Cluster Analysis Error: {modelPredictions.clusterdev.error}</span>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
+                  {/* Cycle Distribution */}
+                  <motion.div 
+                    className="chart-card"
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.4 }}
+                  >
+                    <h3>Cycle Length Distribution</h3>
+                    <div className="chart-wrapper">
+                      <CycleDistributionChart cycles={cycles} />
+                    </div>
+                  </motion.div>
 
-        {/* Trends Tab */}
-        {activeTab === 'trends' && (
-          <div className="trends-section">
-            {/* Charts Section */}
-            <div className="charts-section">
-              <div className="chart-container">
-                <TrendChart cycles={cycles} />
-              </div>
-              {analysisMetrics && (
-                <>
-                  <div className="chart-container">
-                    <BarChart 
-                      title="Cycle Patterns" 
-                      data={[
-                        { label: 'Avg Length', value: analysisMetrics.avgCycleLength, color: '#b8396b' },
-                        { label: 'Std Dev', value: analysisMetrics.stdCycleLength, color: '#d97298' },
-                        { label: 'Menses', value: analysisMetrics.avgMensesLength, color: '#e595b4' },
-                        { label: 'Luteal', value: analysisMetrics.avgLutealPhase, color: '#a87ec0' }
-                      ]}
-                    />
-                  </div>
-                  <div className="chart-container">
-                    <BarChart 
-                      title="Health Metrics Comparison" 
-                      data={[
-                        { label: 'Cycle Regularity', value: 100 - analysisMetrics.irregularCyclesPercent, color: '#4CAF50' },
-                        { label: 'Bleeding Normal', value: 100 - analysisMetrics.unusualBleedingPercent, color: '#2196F3' },
-                        { label: 'Cycle Consistency', value: Math.max(0, 100 - (analysisMetrics.stdCycleLength * 10)), color: '#FF9800' }
-                      ]}
-                    />
-                  </div>
-                </>
+                  {/* Symptoms Intensity Trend */}
+                  <motion.div 
+                    className="chart-card large"
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.5 }}
+                  >
+                    <h3>Symptoms Intensity Over Time</h3>
+                    <div className="chart-wrapper">
+                      <SymptomsIntensityChart cycles={cycles} />
+                    </div>
+                  </motion.div>
+
+                  {/* Symptom Frequency */}
+                  <motion.div 
+                    className="chart-card"
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.6 }}
+                  >
+                    <h3>Symptom Frequency</h3>
+                    <div className="chart-wrapper">
+                      <SymptomFrequencyChart cycles={cycles} />
+                    </div>
+                  </motion.div>
+
+                  {/* Average Symptom Severity */}
+                  <motion.div 
+                    className="chart-card"
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.7 }}
+                  >
+                    <h3>Average Symptom Severity</h3>
+                    <div className="chart-wrapper">
+                      <SymptomSeverityChart cycles={cycles} />
+                    </div>
+                  </motion.div>
+                </div>
+              ) : (
+                <div className="empty-state">
+                  <TrendingUp size={64} />
+                  <h3>Insufficient Data</h3>
+                  <p>Track at least 2 cycles to see trends</p>
+                </div>
               )}
-            </div>
-          </div>
-        )}
+            </motion.div>
+          )}
 
-        {/* Detailed Metrics Tab */}
-        {activeTab === 'metrics' && analysisMetrics && (
-          <div className="detailed-metrics-section">
-            <h2 className="section-title">
-              <Activity size={24} />
-              Detailed Analysis Metrics
-            </h2>
-          <div className="metrics-grid">
-            {/* Cycle Metrics */}
-            <div className="metric-category">
-              <h3 className="category-title">
-                <Calendar size={20} />
-                Cycle Patterns
-              </h3>
-              <div className="metric-cards">
-                <div className="metric-card">
-                  <div className="metric-label">Average Cycle Length</div>
-                  <div className="metric-value">{analysisMetrics.avgCycleLength} days</div>
-                  <div className="metric-range">Typical: 21-35 days</div>
-                </div>
-                <div className="metric-card">
-                  <div className="metric-label">Cycle Length Variation</div>
-                  <div className="metric-value">{analysisMetrics.avgCycleLengthPercent}%</div>
-                  <div className="metric-range">Lower is more regular</div>
-                </div>
-                <div className="metric-card">
-                  <div className="metric-label">Irregular Cycles</div>
-                  <div className="metric-value">{analysisMetrics.irregularCyclesPercent}%</div>
-                  <div className="metric-range">Range: 0-100%</div>
-                </div>
-                <div className="metric-card">
-                  <div className="metric-label">Standard Deviation</div>
-                  <div className="metric-value">{analysisMetrics.stdCycleLength} days</div>
-                  <div className="metric-range">Typical: 0-10 days</div>
-                </div>
-              </div>
-            </div>
+          {/* Metrics Tab */}
+          {activeTab === 'metrics' && (
+            <div className="tab-content">
+              {analysisMetrics ? (
+                <div className="metrics-list">
+                  {/* Cycle Metrics */}
+                  <div className="metrics-section">
+                    <h3>Cycle Metrics</h3>
+                    <div className="metrics-row">
+                      <MetricItem 
+                        label="Average Cycle Length"
+                        value={`${analysisMetrics.avgCycleLength} days`}
+                        status={analysisMetrics.avgCycleLength >= 21 && analysisMetrics.avgCycleLength <= 35 ? 'good' : 'warning'}
+                      />
+                      <MetricItem 
+                        label="Cycle Variability (Std Dev)"
+                        value={`${analysisMetrics.stdCycleLength.toFixed(1)} days`}
+                        status={analysisMetrics.stdCycleLength < 3 ? 'good' : 'warning'}
+                      />
+                      <MetricItem 
+                        label="Irregular Cycles"
+                        value={`${analysisMetrics.irregularCyclesPercent.toFixed(1)}%`}
+                        status={analysisMetrics.irregularCyclesPercent < 20 ? 'good' : 'warning'}
+                      />
+                      <MetricItem 
+                        label="Total Cycles Tracked"
+                        value={analysisMetrics.totalCycles}
+                        status="neutral"
+                      />
+                    </div>
+                  </div>
 
-            {/* Bleeding Metrics */}
-            <div className="metric-category">
-              <h3 className="category-title">
-                <Droplet size={20} />
-                Bleeding Patterns
-              </h3>
-              <div className="metric-cards">
-                <div className="metric-card">
-                  <div className="metric-label">Average Menses Length</div>
-                  <div className="metric-value">{analysisMetrics.avgMensesLength} days</div>
-                  <div className="metric-range">Typical: 3-7 days</div>
-                </div>
-                <div className="metric-card">
-                  <div className="metric-label">Average Bleeding Intensity</div>
-                  <div className="metric-value">{analysisMetrics.avgBleedingIntensity}/5</div>
-                  <div className="metric-range">1=light, 5=heavy</div>
-                </div>
-                <div className="metric-card">
-                  <div className="metric-label">Unusual Bleeding</div>
-                  <div className="metric-value">{analysisMetrics.unusualBleedingPercent}%</div>
-                  <div className="metric-range">Range: 0-100%</div>
-                </div>
-              </div>
-            </div>
+                  {/* Flow/Bleeding Metrics */}
+                  <div className="metrics-section">
+                    <h3>Flow & Bleeding Metrics</h3>
+                    <div className="metrics-row">
+                      <MetricItem 
+                        label="Average Menses Duration"
+                        value={`${analysisMetrics.avgMensesLength.toFixed(1)} days`}
+                        status={analysisMetrics.avgMensesLength >= 3 && analysisMetrics.avgMensesLength <= 7 ? 'good' : 'warning'}
+                      />
+                      <MetricItem 
+                        label="Average Bleeding Intensity"
+                        value={`${analysisMetrics.avgBleedingIntensity.toFixed(1)}/5`}
+                        status={analysisMetrics.avgBleedingIntensity >= 2 && analysisMetrics.avgBleedingIntensity <= 4 ? 'good' : 'warning'}
+                      />
+                      <MetricItem 
+                        label="Unusual Bleeding Events"
+                        value={`${analysisMetrics.unusualBleedingPercent.toFixed(1)}%`}
+                        status={analysisMetrics.unusualBleedingPercent < 30 ? 'good' : 'warning'}
+                      />
+                    </div>
+                  </div>
 
-            {/* Ovulation Metrics */}
-            <div className="metric-category">
-              <h3 className="category-title">
-                <Heart size={20} />
-                Ovulation & Luteal Phase
-              </h3>
-              <div className="metric-cards">
-                <div className="metric-card">
-                  <div className="metric-label">Average Luteal Phase</div>
-                  <div className="metric-value">{analysisMetrics.avgLutealPhase} days</div>
-                  <div className="metric-range">Typical: 12-16 days</div>
-                </div>
-                <div className="metric-card">
-                  <div className="metric-label">Short Luteal Phase</div>
-                  <div className="metric-value">{analysisMetrics.shortLutealPercent}%</div>
-                  <div className="metric-range">Range: 0-100%</div>
-                </div>
-                <div className="metric-card">
-                  <div className="metric-label">Average Ovulation Day</div>
-                  <div className="metric-value">Day {analysisMetrics.avgOvulationDay}</div>
-                  <div className="metric-range">Typical: Day 11-21</div>
-                </div>
-                <div className="metric-card">
-                  <div className="metric-label">Ovulation Variability</div>
-                  <div className="metric-value">{analysisMetrics.ovulationVariability} days</div>
-                  <div className="metric-range">Typical: 0-5 days</div>
-                </div>
-              </div>
-            </div>
+                  {/* Ovulation & Luteal Phase Metrics */}
+                  <div className="metrics-section">
+                    <h3>Ovulation & Luteal Phase</h3>
+                    <div className="metrics-row">
+                      <MetricItem 
+                        label="Average Ovulation Day"
+                        value={`Day ${analysisMetrics.avgOvulationDay.toFixed(1)}`}
+                        status="neutral"
+                      />
+                      <MetricItem 
+                        label="Ovulation Variability"
+                        value={`${analysisMetrics.ovulationVariability.toFixed(1)} days`}
+                        status={analysisMetrics.ovulationVariability < 3 ? 'good' : 'warning'}
+                      />
+                      <MetricItem 
+                        label="Average Luteal Phase"
+                        value={`${analysisMetrics.avgLutealPhase} days`}
+                        status={analysisMetrics.avgLutealPhase >= 12 ? 'good' : 'warning'}
+                      />
+                      <MetricItem 
+                        label="Short Luteal Phase"
+                        value={`${analysisMetrics.shortLutealPercent.toFixed(1)}%`}
+                        status={analysisMetrics.shortLutealPercent < 20 ? 'good' : 'warning'}
+                      />
+                    </div>
+                  </div>
 
-            {/* Personal Info */}
-            <div className="metric-category">
-              <h3 className="category-title">
-                <User size={20} />
-                Personal Information
-              </h3>
-              <div className="metric-cards">
-                <div className="metric-card">
-                  <div className="metric-label">Age</div>
-                  <div className="metric-value">{analysisMetrics.age} years</div>
-                  <div className="metric-range">Range: 12-60 years</div>
+                  {/* Personal Health Data */}
+                  <div className="metrics-section">
+                    <h3>Personal Health Information</h3>
+                    <div className="metrics-row">
+                      <MetricItem 
+                        label="Age"
+                        value={`${analysisMetrics.age} years`}
+                        status="neutral"
+                      />
+                      <MetricItem 
+                        label="BMI (Body Mass Index)"
+                        value={analysisMetrics.bmi.toFixed(1)}
+                        status={analysisMetrics.bmi >= 18.5 && analysisMetrics.bmi <= 24.9 ? 'good' : 'warning'}
+                      />
+                      <MetricItem 
+                        label="Age at First Menstruation"
+                        value={`${analysisMetrics.ageAtFirstMenstruation} years`}
+                        status="neutral"
+                      />
+                      <MetricItem 
+                        label="Number of Pregnancies"
+                        value={analysisMetrics.numberPregnancies}
+                        status="neutral"
+                      />
+                      <MetricItem 
+                        label="Number of Abortions"
+                        value={analysisMetrics.numberAbortions}
+                        status="neutral"
+                      />
+                      <MetricItem 
+                        label="Currently Breastfeeding"
+                        value={analysisMetrics.currentlyBreastfeeding ? 'Yes' : 'No'}
+                        status="neutral"
+                      />
+                    </div>
+                  </div>
                 </div>
-                <div className="metric-card">
-                  <div className="metric-label">BMI</div>
-                  <div className="metric-value">{analysisMetrics.bmi}</div>
-                  <div className="metric-range">Typical: 18.5-35</div>
+              ) : (
+                <div className="empty-state">
+                  <BarChart3 size={64} />
+                  <h3>No Metrics Available</h3>
+                  <p>Run an analysis to see detailed metrics</p>
                 </div>
-                <div className="metric-card">
-                  <div className="metric-label">Total Cycles Tracked</div>
-                  <div className="metric-value">{analysisMetrics.totalCycles}</div>
-                  <div className="metric-range">Minimum: 3 cycles</div>
-                </div>
-                <div className="metric-card">
-                  <div className="metric-label">Number of Pregnancies</div>
-                  <div className="metric-value">{analysisMetrics.numberPregnancies}</div>
-                  <div className="metric-range">Range: 0 or more</div>
-                </div>
-                <div className="metric-card">
-                  <div className="metric-label">Number of Abortions</div>
-                  <div className="metric-value">{analysisMetrics.numberAbortions}</div>
-                  <div className="metric-range">Range: 0 or more</div>
-                </div>
-                <div className="metric-card">
-                  <div className="metric-label">Age at First Menstruation</div>
-                  <div className="metric-value">{analysisMetrics.ageAtFirstMenstruation} years</div>
-                  <div className="metric-range">Typical: 9-16 years</div>
-                </div>
-                <div className="metric-card">
-                  <div className="metric-label">Currently Breastfeeding</div>
-                  <div className="metric-value">{analysisMetrics.currentlyBreastfeeding ? 'Yes' : 'No'}</div>
-                  <div className="metric-range">Yes/No</div>
-                </div>
-              </div>
-            </div>
-          </div>
-          
-          {analysisMetrics.lastCalculated && (
-            <div className="last-updated">
-              <Clock size={16} />
-              Last calculated: {new Date(analysisMetrics.lastCalculated.toDate()).toLocaleString()}
+              )}
             </div>
           )}
-          </div>
-        )}
 
-        {/* History Tab */}
-        {activeTab === 'history' && analysisHistory.length > 0 && (
-          <div className="history-section">
-            <h2 className="section-title">
-              <TrendingUp size={24} />
-              Analysis History
-            </h2>
-            <div className="history-list">
-              {analysisHistory.map((analysis, index) => (
-                <div key={analysis.id || index} className="history-item">
-                  <div className="history-header">
-                    <div className="history-date">
-                      {analysis.createdAt ? new Date(analysis.createdAt.toDate()).toLocaleDateString() : 'Unknown date'}
-                    </div>
-                    {analysis.riskCategory && (
-                      <div className={`risk-badge risk-${analysis.riskCategory.toLowerCase()}`}>
-                        {analysis.riskCategory}
+          {/* History Tab */}
+          {activeTab === 'history' && (
+            <motion.div
+              key="history"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.4 }}
+              className="tab-content"
+            >
+              {analysisHistory.length > 0 ? (
+                <div className="history-list">
+                  {analysisHistory.map((analysis, index) => (
+                    <motion.div 
+                      key={analysis.id || index}
+                      className="history-item"
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: index * 0.1 }}
+                    >
+                      <div className="history-header">
+                        <div className="history-date">
+                          <Clock size={16} />
+                          {analysis.createdAt ? new Date(analysis.createdAt.toDate()).toLocaleDateString() : 'Unknown'}
+                        </div>
+                        {analysis.riskCategory && (
+                          <div className={`risk-badge ${analysis.riskCategory.toLowerCase()}`}>
+                            {analysis.riskCategory}
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
-                  {analysis.prwiScore && (
-                    <div className="analysis-score">
-                      PWRI Score: {analysis.prwiScore.toFixed(2)}
-                    </div>
-                  )}
-                  {analysis.recommendations && analysis.recommendations.length > 0 && (
-                    <div className="recommendations">
-                      <strong>Recommendations:</strong>
-                      <ul>
-                        {analysis.recommendations.map((rec, i) => (
-                          <li key={i}>{rec}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
+                      <div className="history-content">
+                        {analysis.prwiScore && (
+                          <div className="history-score">
+                            <Target size={16} />
+                            <span>Score: {analysis.prwiScore.toFixed(1)}</span>
+                          </div>
+                        )}
+                        {analysis.recommendations && analysis.recommendations.length > 0 && (
+                          <div className="history-recommendations">
+                            <p>{analysis.recommendations[0]}</p>
+                          </div>
+                        )}
+                      </div>
+                    </motion.div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Empty States */}
-        {!analysisMetrics && cycles.length >= 2 && (
-          <div className="no-metrics">
-            <Brain size={48} />
-            <h3>Ready for Analysis</h3>
-            <p>You have {cycles.length} cycles tracked. Click "Calculate Metrics" to generate your comprehensive analysis.</p>
-          </div>
-        )}
-
-        {cycles.length < 2 && (
-          <div className="no-data">
-            <Calendar size={48} />
-            <h3>Not Enough Data</h3>
-            <p>Please track at least 2 complete menstrual cycles to generate analysis metrics.</p>
-            <p>Visit the Calendar page to start tracking your cycles.</p>
-          </div>
-        )}
+              ) : (
+                <div className="empty-state">
+                  <Clock size={64} />
+                  <h3>No History Yet</h3>
+                  <p>Your analysis history will appear here</p>
+                </div>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );
 };
+
+// Chart Components
+const RiskChart = ({ probabilities }) => {
+  if (!probabilities) return null;
+
+  const data = {
+    labels: ['Low Risk', 'Medium Risk', 'High Risk'],
+    datasets: [{
+      data: [
+        probabilities.low * 100,
+        probabilities.medium * 100,
+        probabilities.high * 100
+      ],
+      backgroundColor: ['#10B981', '#F59E0B', '#EF4444'],
+      borderWidth: 0,
+    }]
+  };
+
+  const options = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        position: 'bottom',
+        labels: { padding: 15, font: { size: 11 } }
+      },
+      tooltip: {
+        callbacks: {
+          label: (context) => `${context.label}: ${context.parsed.toFixed(1)}%`
+        }
+      }
+    }
+  };
+
+  return <Doughnut data={data} options={options} />;
+};
+
+const CycleTrendChart = ({ cycles }) => {
+  if (!cycles || cycles.length < 2) return null;
+
+  const cycleLengths = [];
+  const labels = [];
+
+  for (let i = 0; i < cycles.length - 1; i++) {
+    const start = new Date(cycles[i].startDate?.toDate ? cycles[i].startDate.toDate() : cycles[i].startDate);
+    const nextStart = new Date(cycles[i + 1].startDate?.toDate ? cycles[i + 1].startDate.toDate() : cycles[i + 1].startDate);
+    const length = Math.round((nextStart - start) / (1000 * 60 * 60 * 24));
+    cycleLengths.push(length);
+    labels.push(`Cycle ${i + 1}`);
+  }
+
+  const data = {
+    labels,
+    datasets: [{
+      label: 'Cycle Length (days)',
+      data: cycleLengths,
+      borderColor: '#8B5CF6',
+      backgroundColor: 'rgba(139, 92, 246, 0.1)',
+      borderWidth: 3,
+      fill: true,
+      tension: 0.4,
+      pointBackgroundColor: '#8B5CF6',
+      pointBorderColor: '#fff',
+      pointBorderWidth: 2,
+      pointRadius: 5,
+    }]
+  };
+
+  const options = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+    },
+    scales: {
+      y: {
+        beginAtZero: false,
+        grid: { color: 'rgba(0, 0, 0, 0.05)' },
+      },
+      x: {
+        grid: { display: false },
+      }
+    }
+  };
+
+  return <Line data={data} options={options} />;
+};
+
+const CycleDistributionChart = ({ cycles }) => {
+  if (!cycles || cycles.length < 2) return null;
+
+  const cycleLengths = [];
+  for (let i = 0; i < cycles.length - 1; i++) {
+    const start = new Date(cycles[i].startDate?.toDate ? cycles[i].startDate.toDate() : cycles[i].startDate);
+    const nextStart = new Date(cycles[i + 1].startDate?.toDate ? cycles[i + 1].startDate.toDate() : cycles[i + 1].startDate);
+    const length = Math.round((nextStart - start) / (1000 * 60 * 60 * 24));
+    cycleLengths.push(length);
+  }
+
+  const distribution = cycleLengths.reduce((acc, length) => {
+    const range = length < 25 ? 'Short' : length > 35 ? 'Long' : 'Normal';
+    acc[range] = (acc[range] || 0) + 1;
+    return acc;
+  }, {});
+
+  const data = {
+    labels: Object.keys(distribution),
+    datasets: [{
+      data: Object.values(distribution),
+      backgroundColor: ['#EF4444', '#10B981', '#F59E0B'],
+      borderWidth: 0
+    }]
+  };
+
+  const options = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { position: 'bottom', labels: { padding: 15 } }
+    }
+  };
+
+  return <Doughnut data={data} options={options} />;
+};
+
+const FlowIntensityChart = ({ cycles }) => {
+  if (!cycles || cycles.length === 0) return null;
+
+  const intensityData = cycles.reduce((acc, cycle) => {
+    const intensity = cycle.intensity || 3;
+    const label = intensity <= 2 ? 'Light' : intensity <= 3 ? 'Normal' : 'Heavy';
+    acc[label] = (acc[label] || 0) + 1;
+    return acc;
+  }, {});
+
+  const data = {
+    labels: Object.keys(intensityData),
+    datasets: [{
+      data: Object.values(intensityData),
+      backgroundColor: ['#3B82F6', '#10B981', '#EF4444'],
+      borderWidth: 0
+    }]
+  };
+
+  const options = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { position: 'bottom', labels: { padding: 15 } }
+    }
+  };
+
+  return <PolarArea data={data} options={options} />;
+};
+
+const MensesDurationChart = ({ cycles }) => {
+  if (!cycles || cycles.length === 0) return null;
+
+  const labels = [];
+  const durations = [];
+
+  cycles.forEach((cycle, index) => {
+    if (cycle.startDate && cycle.endDate) {
+      const start = new Date(cycle.startDate?.toDate ? cycle.startDate.toDate() : cycle.startDate);
+      const end = new Date(cycle.endDate?.toDate ? cycle.endDate.toDate() : cycle.endDate);
+      const duration = Math.round((end - start) / (1000 * 60 * 60 * 24)) + 1;
+      labels.push(`Cycle ${index + 1}`);
+      durations.push(duration);
+    }
+  });
+
+  const data = {
+    labels,
+    datasets: [{
+      label: 'Menses Duration (days)',
+      data: durations,
+      backgroundColor: 'rgba(255, 170, 197, 0.6)',
+      borderColor: 'rgba(255, 170, 197, 1)',
+      borderWidth: 2,
+      tension: 0.4,
+      fill: true,
+    }]
+  };
+
+  const options = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: true, position: 'top' },
+    },
+    scales: {
+      y: {
+        beginAtZero: true,
+        grid: { color: 'rgba(0, 0, 0, 0.05)' },
+        title: { display: true, text: 'Days' }
+      },
+      x: {
+        grid: { display: false },
+      }
+    }
+  };
+
+  return <Line data={data} options={options} />;
+};
+
+const SymptomsIntensityChart = ({ cycles }) => {
+  if (!cycles || cycles.length === 0) return null;
+
+  const labels = [];
+  const crampsData = [];
+  const fatigueData = [];
+  const backPainData = [];
+
+  cycles.forEach((cycle, index) => {
+    if (cycle.symptoms) {
+      labels.push(`Cycle ${index + 1}`);
+      crampsData.push(cycle.symptoms.cramps || 0);
+      fatigueData.push(cycle.symptoms.fatigue || 0);
+      backPainData.push(cycle.symptoms.backPain || 0);
+    }
+  });
+
+  if (labels.length === 0) return <div style={{ padding: '40px', textAlign: 'center', color: '#6b7280' }}>No symptom data available</div>;
+
+  const data = {
+    labels,
+    datasets: [
+      {
+        label: 'Cramps',
+        data: crampsData,
+        borderColor: '#EF4444',
+        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+        tension: 0.4,
+        fill: true,
+      },
+      {
+        label: 'Fatigue',
+        data: fatigueData,
+        borderColor: '#F59E0B',
+        backgroundColor: 'rgba(245, 158, 11, 0.1)',
+        tension: 0.4,
+        fill: true,
+      },
+      {
+        label: 'Back Pain',
+        data: backPainData,
+        borderColor: '#8B5CF6',
+        backgroundColor: 'rgba(139, 92, 246, 0.1)',
+        tension: 0.4,
+        fill: true,
+      }
+    ]
+  };
+
+  const options = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: true, position: 'top' },
+    },
+    scales: {
+      y: {
+        beginAtZero: true,
+        max: 5,
+        grid: { color: 'rgba(0, 0, 0, 0.05)' },
+        title: { display: true, text: 'Intensity (0-5)' }
+      },
+      x: {
+        grid: { display: false },
+      }
+    }
+  };
+
+  return <Line data={data} options={options} />;
+};
+
+const SymptomFrequencyChart = ({ cycles }) => {
+  if (!cycles || cycles.length === 0) return null;
+
+  const symptomCounts = {
+    'Headache': 0,
+    'Bloating': 0,
+    'Nausea': 0,
+    'Acne': 0,
+  };
+
+  cycles.forEach(cycle => {
+    if (cycle.symptoms) {
+      if (cycle.symptoms.headache) symptomCounts['Headache']++;
+      if (cycle.symptoms.bloating) symptomCounts['Bloating']++;
+      if (cycle.symptoms.nausea) symptomCounts['Nausea']++;
+      if (cycle.symptoms.acne) symptomCounts['Acne']++;
+    }
+  });
+
+  const data = {
+    labels: Object.keys(symptomCounts),
+    datasets: [{
+      label: 'Frequency',
+      data: Object.values(symptomCounts),
+      backgroundColor: [
+        'rgba(139, 92, 246, 0.6)',
+        'rgba(59, 130, 246, 0.6)',
+        'rgba(16, 185, 129, 0.6)',
+        'rgba(245, 158, 11, 0.6)',
+      ],
+      borderColor: [
+        'rgba(139, 92, 246, 1)',
+        'rgba(59, 130, 246, 1)',
+        'rgba(16, 185, 129, 1)',
+        'rgba(245, 158, 11, 1)',
+      ],
+      borderWidth: 2,
+    }]
+  };
+
+  const options = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+    },
+    scales: {
+      y: {
+        beginAtZero: true,
+        ticks: { stepSize: 1 },
+        grid: { color: 'rgba(0, 0, 0, 0.05)' },
+        title: { display: true, text: 'Number of Cycles' }
+      },
+      x: {
+        grid: { display: false },
+      }
+    }
+  };
+
+  return <Bar data={data} options={options} />;
+};
+
+const SymptomSeverityChart = ({ cycles }) => {
+  if (!cycles || cycles.length === 0) return null;
+
+  let totalCramps = 0, totalFatigue = 0, totalBackPain = 0, totalMood = 0, totalCravings = 0;
+  let count = 0;
+
+  cycles.forEach(cycle => {
+    if (cycle.symptoms) {
+      totalCramps += cycle.symptoms.cramps || 0;
+      totalFatigue += cycle.symptoms.fatigue || 0;
+      totalBackPain += cycle.symptoms.backPain || 0;
+      totalMood += cycle.symptoms.mood || 0;
+      totalCravings += cycle.symptoms.cravings || 0;
+      count++;
+    }
+  });
+
+  if (count === 0) return <div style={{ padding: '40px', textAlign: 'center', color: '#6b7280' }}>No symptom data available</div>;
+
+  const data = {
+    labels: ['Cramps', 'Fatigue', 'Back Pain', 'Mood', 'Cravings'],
+    datasets: [{
+      label: 'Average Severity',
+      data: [
+        (totalCramps / count).toFixed(1),
+        (totalFatigue / count).toFixed(1),
+        (totalBackPain / count).toFixed(1),
+        (totalMood / count).toFixed(1),
+        (totalCravings / count).toFixed(1),
+      ],
+      backgroundColor: [
+        'rgba(239, 68, 68, 0.6)',
+        'rgba(245, 158, 11, 0.6)',
+        'rgba(139, 92, 246, 0.6)',
+        'rgba(59, 130, 246, 0.6)',
+        'rgba(236, 72, 153, 0.6)',
+      ],
+      borderWidth: 0,
+    }]
+  };
+
+  const options = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+    },
+    scales: {
+      r: {
+        beginAtZero: true,
+        max: 5,
+        ticks: { stepSize: 1 },
+      }
+    }
+  };
+
+  return <PolarArea data={data} options={options} />;
+};
+
+const MetricItem = ({ label, value, status }) => (
+  <div className="metric-item">
+    <div className="metric-item-label">{label}</div>
+    <div className="metric-item-value">{value}</div>
+    <div className={`metric-item-status ${status}`}>
+      {status === 'good' ? <CheckCircle size={14} /> : status === 'warning' ? <AlertCircle size={14} /> : null}
+    </div>
+  </div>
+);
 
 export default Analysis;

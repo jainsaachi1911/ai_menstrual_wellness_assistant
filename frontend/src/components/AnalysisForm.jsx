@@ -18,6 +18,9 @@ import {
 } from 'lucide-react';
 import '../styles/AnalysisForm.css';
 
+// API Configuration
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5002';
+
 // Helper to calculate difference in days between two ISO date strings or Date objects
 const diffInDays = (start, end) => {
   const msPerDay = 1000 * 60 * 60 * 24;
@@ -414,7 +417,7 @@ const AnalysisForm = () => {
 
     try {
       const features = { ...formData, cycles: buildCyclesFromMap() };
-      const response = await fetch('http://localhost:5002/api/predict', {
+      const response = await fetch(`${API_BASE_URL}/api/predict`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ features })
