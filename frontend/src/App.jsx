@@ -1,50 +1,21 @@
-import React, { Component } from 'react';
+import React from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import Navbar from './components/Navbar';
-import ChatSidebar from './components/ChatSidebar';
-
-class ErrorBoundary extends Component {
-  constructor(props) {
-    super(props);
-    this.state = { hasError: false, error: null };
-  }
-  static getDerivedStateFromError(error) {
-    return { hasError: true, error };
-  }
-  componentDidCatch(error, errorInfo) {
-    // You can log errorInfo here if needed
-  }
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div style={{ position: 'fixed', right: 0, top: 0, zIndex: 2000, background: '#222', color: '#fff', padding: 24 }}>
-          <h2>Something went wrong in Chat.</h2>
-          <pre>{this.state.error?.toString()}</pre>
-        </div>
-      );
-    }
-    return this.props.children;
-  }
-}
 import Home from './pages/Home';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
 import User from './pages/User';
 import Analysis from './pages/Analysis';
 import Calendar from './pages/Calendar';
+import AIChat from './pages/AIChat';
 import './App.css';
 
-const HomeWithChatButton = ({ onOpenChat, chatOpen }) => (
-  <Home onOpenChat={onOpenChat} />
-);
-
 function App() {
-  const [chatOpen, setChatOpen] = React.useState(false);
   const [navOpen, setNavOpen] = React.useState(true);
   const location = useLocation();
   const hideNavbar = location.pathname === '/login' || location.pathname === '/signup';
   const isHomePage = location.pathname === '/home';
-  
+
   return (
     <div style={{ 
       display: 'flex',
@@ -59,18 +30,16 @@ function App() {
         transition: 'margin-left 0.3s ease'
       }}>
         <Routes>
-          <Route path="/home" element={<HomeWithChatButton onOpenChat={() => setChatOpen(true)} chatOpen={chatOpen} />} />
+          <Route path="/home" element={<Home />} />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
           <Route path="/user" element={<User />} />
           <Route path="/calendar" element={<Calendar />} />
           <Route path="/analysis" element={<Analysis />} />
+          <Route path="/ai-chat" element={<AIChat />} />
           <Route path="/" element={<Navigate to="/signup" />} />
         </Routes>
       </div>
-      <ErrorBoundary>
-        <ChatSidebar isOpen={chatOpen} onClose={() => setChatOpen(false)} />
-      </ErrorBoundary>
     </div>
   );
 }

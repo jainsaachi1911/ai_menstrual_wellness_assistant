@@ -6,7 +6,7 @@ import { doc, getDoc } from 'firebase/firestore';
 import { Calendar, MessageCircle, Activity, Shield, Bot, TrendingUp, Heart, Sparkles, Flower2, Moon, Sun, Star, Zap, Droplet, CloudRain } from 'lucide-react';
 import '../styles/Home.css';
 
-const Home = ({ onOpenChat }) => {
+const Home = () => {
   const navigate = useNavigate();
   const [checking, setChecking] = useState(true);
   const [firstName, setFirstName] = useState('');
@@ -114,7 +114,7 @@ const Home = ({ onOpenChat }) => {
             
             <button 
               className="home-btn btn-secondary"
-              onClick={onOpenChat}
+              onClick={() => navigate('/ai-chat')}
             >
               <MessageCircle size={22} />
               <span>Ask AI Assistant</span>
