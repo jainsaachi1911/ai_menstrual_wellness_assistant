@@ -48,9 +48,17 @@ export async function addAnalysis(uid, analysis) {
 export async function getCycles(uid) {
   try {
     const cyclesCol = collection(db, "users", uid, "cycles");
-    const q = query(cyclesCol, orderBy("startDate", "asc"));
-    const snap = await getDocs(q);
-    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const snap = await getDocs(cyclesCol);
+    const cycles = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    
+    // Sort by monthKey (YYYY-MM format) to maintain chronological month order
+    cycles.sort((a, b) => {
+      const keyA = a.monthKey || '';
+      const keyB = b.monthKey || '';
+      return keyA.localeCompare(keyB);
+    });
+    
+    return cycles;
   } catch (error) {
     console.error('Error getting cycles:', error);
     throw error;
@@ -172,26 +180,33 @@ export async function removeDuplicateCycles(uid) {
 
 export async function addCycleWithDeduplication(uid, cycleData) {
   try {
-    // Check for existing cycles with the same date range
     const cycles = await getCycles(uid);
-    const startISO = cycleData.startDate instanceof Date ? 
-      cycleData.startDate.toISOString().slice(0,10) : cycleData.startDate;
-    const endISO = cycleData.endDate instanceof Date ? 
-      cycleData.endDate.toISOString().slice(0,10) : cycleData.endDate;
     
-    const existing = cycles.find(cycle => {
-      const existingStartISO = cycle.startDate?.toDate?.() ? 
-        cycle.startDate.toDate().toISOString().slice(0,10) : cycle.startDate;
-      const existingEndISO = cycle.endDate?.toDate?.() ? 
-        cycle.endDate.toDate().toISOString().slice(0,10) : cycle.endDate;
+    // Primary match: by monthKey (most reliable)
+    let existing = null;
+    if (cycleData.monthKey) {
+      existing = cycles.find(cycle => cycle.monthKey === cycleData.monthKey);
+    }
+    
+    // Fallback match: by date range
+    if (!existing) {
+      const startISO = cycleData.startDate instanceof Date ? 
+        cycleData.startDate.toISOString().slice(0,10) : cycleData.startDate;
+      const endISO = cycleData.endDate instanceof Date ? 
+        cycleData.endDate.toISOString().slice(0,10) : cycleData.endDate;
       
-      return existingStartISO === startISO && existingEndISO === endISO;
-    });
+      existing = cycles.find(cycle => {
+        const existingStartISO = cycle.startDate?.toDate?.() ? 
+          cycle.startDate.toDate().toISOString().slice(0,10) : cycle.startDate;
+        const existingEndISO = cycle.endDate?.toDate?.() ? 
+          cycle.endDate.toDate().toISOString().slice(0,10) : cycle.endDate;
+        
+        return existingStartISO === startISO && existingEndISO === endISO;
+      });
+    }
     
     if (existing) {
-      console.log(`Cycle with dates ${startISO} to ${endISO} already exists. Updating instead of creating duplicate.`);
-      console.log('FIRESTORE: Updating cycle with symptoms:', JSON.stringify(cycleData.symptoms));
-      // Update the existing cycle instead of creating a new one
+      // Update existing cycle
       const cycleRef = doc(db, "users", uid, "cycles", existing.id);
       await setDoc(cycleRef, {
         ...cycleData,
@@ -200,8 +215,7 @@ export async function addCycleWithDeduplication(uid, cycleData) {
       });
       return { id: existing.id, updated: true };
     } else {
-      // No duplicate found, create new cycle
-      console.log('FIRESTORE: Creating new cycle with symptoms:', JSON.stringify(cycleData.symptoms));
+      // Create new cycle
       return await addCycle(uid, cycleData);
     }
   } catch (error) {
@@ -210,25 +224,6 @@ export async function addCycleWithDeduplication(uid, cycleData) {
   }
 }
 
-export async function debugGetAllCycles(uid) {
-  try {
-    const cycles = await getCycles(uid);
-    console.log('\n=== DEBUG: ALL CYCLES IN FIRESTORE ===');
-    cycles.forEach((cycle, idx) => {
-      const startISO = cycle.startDate?.toDate?.() ? cycle.startDate.toDate().toISOString().slice(0,10) : cycle.startDate;
-      const endISO = cycle.endDate?.toDate?.() ? cycle.endDate.toDate().toISOString().slice(0,10) : cycle.endDate;
-      console.log(`Cycle ${idx}: ${startISO} to ${endISO}`);
-      console.log('  Symptoms:', JSON.stringify(cycle.symptoms));
-      console.log('  Intensity:', cycle.intensity);
-      console.log('  Full data:', cycle);
-    });
-    console.log('=== END DEBUG ===\n');
-    return cycles;
-  } catch (error) {
-    console.error('Error in debugGetAllCycles:', error);
-    throw error;
-  }
-}
 
 export async function saveMetrics(uid, metrics) {
   try {
@@ -248,20 +243,6 @@ export async function saveMetrics(uid, metrics) {
     return { success: true };
   } catch (error) {
     console.error('Error saving metrics:', error);
-    throw error;
-  }
-}
-
-export async function getMetrics(uid) {
-  try {
-    const userRef = doc(db, "users", uid);
-    const snap = await getDoc(userRef);
-    if (snap.exists() && snap.data().metrics) {
-      return snap.data().metrics;
-    }
-    return null;
-  } catch (error) {
-    console.error('Error getting metrics:', error);
     throw error;
   }
 }

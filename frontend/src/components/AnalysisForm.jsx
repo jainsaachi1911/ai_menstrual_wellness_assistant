@@ -3,7 +3,7 @@ import { auth } from '../services/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { deleteDoc, doc } from 'firebase/firestore';
 import { db } from '../services/firebase';
-import { addCycle, addAnalysis, getCycles, removeDuplicateCycles, addCycleWithDeduplication, saveMetrics, getMetrics } from '../services/firestore';
+import { addCycle, addAnalysis, getCycles, removeDuplicateCycles, addCycleWithDeduplication, saveMetrics } from '../services/firestore';
 import { 
   Activity, 
   Brain, 
@@ -172,132 +172,73 @@ const AnalysisForm = () => {
   // Load cycles from Firestore so calendar persists across visits
   useEffect(() => {
     const load = async () => {
-      if (!user || authLoading) {
-        console.log('No user or still loading auth:', { user, authLoading });
-        return;
-      }
+      if (!user || authLoading) return;
       
       // Prevent loading cycles multiple times for the same user
-      if (cyclesLoadedRef.current === user.uid) {
-        console.log('Cycles already loaded for this user, skipping reload');
-        return;
-      }
+      if (cyclesLoadedRef.current === user.uid) return;
       
       try {
-        console.log('Loading cycles from Firestore...');
         const list = await getCycles(user.uid);
-        console.log('Cycles loaded:', list);
         
-        // Build map keyed by YYYY-MM; prefer cycles with symptoms when duplicates exist
+        // Build map keyed by YYYY-MM
         const map = {};
         for (const c of list) {
           const startISO = c.startDate?.toDate?.() ? c.startDate.toDate().toISOString().slice(0,10) : c.startDate;
           const endISO = c.endDate?.toDate?.() ? c.endDate.toDate().toISOString().slice(0,10) : c.endDate;
-          console.log('Processing cycle:', { startISO, endISO, intensity: c.intensity, symptoms: c.symptoms, symptomsType: typeof c.symptoms });
           if (!startISO || !endISO) continue;
-          const key = getMonthKey(new Date(startISO));
+          
+          const key = c.monthKey || getMonthKey(new Date(startISO));
           
           // Ensure symptoms is a valid object
-          let symptomsToStore = c.symptoms;
-          const hasSymptoms = symptomsToStore && typeof symptomsToStore === 'object';
-          if (!hasSymptoms) {
-            console.warn(`Invalid symptoms for ${key}, using defaults`);
-            symptomsToStore = memoizedInitialSymptoms;
-          }
+          const symptomsToStore = (c.symptoms && typeof c.symptoms === 'object') 
+            ? c.symptoms 
+            : memoizedInitialSymptoms;
           
-          const newEntry = {
-            start: startISO,
-            end: endISO,
-            intensity: c.intensity ? String(c.intensity) : (c.avgBleedingIntensity ? String(c.avgBleedingIntensity) : ''),
-            symptoms: symptomsToStore,
-            id: c.id,
-          };
-          
-          // If this month key doesn't exist yet, or if current entry has symptoms and existing doesn't, use current
-          const existingEntry = map[key];
-          const existingHasSymptoms = existingEntry && existingEntry.symptoms && typeof existingEntry.symptoms === 'object' && Object.keys(existingEntry.symptoms).length > 0;
-          const currentHasSymptoms = hasSymptoms && Object.keys(symptomsToStore).length > 0;
-          
-          if (!existingEntry || (currentHasSymptoms && !existingHasSymptoms)) {
-            map[key] = newEntry;
-            console.log(`Mapped cycle ${key}:`, { startISO, endISO, symptoms: symptomsToStore, preferred: !existingEntry ? 'first' : 'has_symptoms' });
-          } else if (existingEntry) {
-            console.log(`Skipped duplicate cycle ${key} (existing has symptoms: ${existingHasSymptoms}, current has symptoms: ${currentHasSymptoms})`);
+          // Only keep the most recent entry per month
+          if (!map[key]) {
+            map[key] = {
+              start: startISO,
+              end: endISO,
+              intensity: c.intensity ? String(c.intensity) : '',
+              symptoms: symptomsToStore,
+              id: c.id,
+            };
           }
         }
-        console.log('Built cyclesMap:', map);
+        
         setCyclesMap(map);
         setCyclesLoaded(true);
         cyclesLoadedRef.current = user.uid;
-        
-        // Note: Form fields will be populated by the form update effect
-        // after cyclesLoaded becomes true
       } catch (error) {
         console.error('Error loading cycles:', error);
       }
     };
     load();
-  }, [user, authLoading, ensureValidSymptoms]);
+  }, [user, authLoading, memoizedInitialSymptoms]);
 
   // Build cycles array whenever cyclesMap changes
   useEffect(() => {
     buildCyclesFromMap();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cyclesMap, ensureValidSymptoms]);
+  }, [cyclesMap]);
 
-  // Monitor formData changes for debugging
+  // Update form fields when currentDate changes
   useEffect(() => {
-    if (formData.AvgCycleLength || formData.IrregularCyclesPercent !== undefined) {
-      console.log('\n=== FORM DATA UPDATED ===');
-      console.log('AvgCycleLength:', formData.AvgCycleLength);
-      console.log('AvgCycleLengthPercent:', formData.AvgCycleLengthPercent);
-      console.log('IrregularCyclesPercent:', formData.IrregularCyclesPercent);
-      console.log('StdCycleLength:', formData.StdCycleLength);
-      console.log('AvgLutealPhase:', formData.AvgLutealPhase);
-      console.log('ShortLutealPercent:', formData.ShortLutealPercent);
-      console.log('AvgBleedingIntensity:', formData.AvgBleedingIntensity);
-      console.log('UnusualBleedingPercent:', formData.UnusualBleedingPercent);
-      console.log('AvgMensesLength:', formData.AvgMensesLength);
-      console.log('AvgOvulationDay:', formData.AvgOvulationDay);
-      console.log('OvulationVariability:', formData.OvulationVariability);
-      console.log('TotalCycles:', formData.TotalCycles);
-      console.log('=== END FORM DATA UPDATE ===\n');
-    }
-  }, [formData]);
-
-  // Update form fields when cyclesMap is loaded and currentDate changes
-  useEffect(() => {
-    // Only update form if cycles have been loaded from Firestore
-    if (!cyclesLoaded) {
-      console.log('Cycles not yet loaded, skipping form update');
-      return;
-    }
+    if (!cyclesLoaded) return;
     
     const key = getMonthKey(currentDate);
-    console.log('Form update effect triggered - key:', key, 'cyclesLoaded:', cyclesLoaded);
-    console.log('Current cyclesMap keys:', Object.keys(cyclesMap));
     const saved = cyclesMap[key];
-    console.log('Saved data for key:', saved);
+    
     if (saved) {
-      console.log('Setting form from saved data for', key);
       setTempStart(saved.start || '');
       setTempEnd(saved.end || '');
       setTempIntensity(saved.intensity || '');
-      const symptomsToSet = ensureValidSymptoms(saved.symptoms);
-      console.log('Setting symptoms for month:', key);
-      console.log('Raw symptoms from DB:', JSON.stringify(saved.symptoms));
-      console.log('Validated symptoms to set:', JSON.stringify(symptomsToSet));
-      setSymptoms(symptomsToSet);
-      console.log('Form populated with symptoms for', key);
+      setSymptoms(ensureValidSymptoms(saved.symptoms));
     } else {
-      console.log('No saved data for', key, '- clearing form');
-      console.log('Available keys in cyclesMap:', Object.keys(cyclesMap));
-      console.log('Full cyclesMap:', JSON.stringify(cyclesMap, null, 2));
       setTempStart('');
       setTempEnd('');
       setTempIntensity('');
       setSymptoms(memoizedInitialSymptoms);
-      console.log('Form cleared, using initial symptoms');
     }
   }, [currentDate.getFullYear(), currentDate.getMonth(), cyclesMap, cyclesLoaded, ensureValidSymptoms, memoizedInitialSymptoms, user]);
 

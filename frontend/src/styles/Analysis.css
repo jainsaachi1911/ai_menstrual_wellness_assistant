@@ -1140,3 +1140,309 @@
     justify-content: center;
   }
 }
+
+/* Glass Card Styling for Model Insights */
+.insights-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 28px;
+  margin-top: 40px;
+  padding: 0 20px;
+}
+
+.glass-card {
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(25px);
+  -webkit-backdrop-filter: blur(25px);
+  border: 1.5px solid rgba(255, 255, 255, 0.4);
+  border-radius: 24px;
+  padding: 32px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.glass-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.6), transparent);
+}
+
+.glass-card.featured {
+  grid-column: 1 / -1;
+  background: linear-gradient(135deg, rgba(184, 163, 255, 0.15), rgba(255, 170, 197, 0.15));
+  border: 1.5px solid rgba(184, 163, 255, 0.3);
+  box-shadow: 0 15px 50px rgba(184, 163, 255, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+.glass-card.featured.prwi-card {
+  background: linear-gradient(135deg, rgba(157, 230, 186, 0.1), rgba(255, 184, 153, 0.1));
+}
+
+.glass-card:hover {
+  box-shadow: 0 15px 50px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  border-color: rgba(255, 255, 255, 0.6);
+  transform: translateY(-4px);
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.icon-wrapper {
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 24px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+
+.icon-wrapper.prwi {
+  background: linear-gradient(135deg, #b8a3ff, #ffaac5);
+}
+
+.icon-wrapper.risk {
+  background: linear-gradient(135deg, #ffb899, #ffaac5);
+}
+
+.icon-wrapper.pattern {
+  background: linear-gradient(135deg, #99d5ff, #9de6ba);
+}
+
+.card-header h3 {
+  margin: 0;
+  font-size: 1.3rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.card-subtitle {
+  margin: 4px 0 0 0;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+/* Score Display */
+.score-display {
+  display: flex;
+  justify-content: center;
+  margin: 24px 0;
+}
+
+.score-circle {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.score-value {
+  position: absolute;
+  font-size: 2.2rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.card-content {
+  text-align: center;
+}
+
+.interpretation {
+  font-size: 1rem;
+  color: var(--text-secondary);
+  margin: 16px 0;
+  line-height: 1.5;
+}
+
+.score-range {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.range-label {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+/* Risk Badge */
+.risk-badge {
+  padding: 12px 20px;
+  border-radius: 12px;
+  text-align: center;
+  font-weight: 600;
+  color: white;
+  margin-bottom: 16px;
+}
+
+/* Probability Bars */
+.probability-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin: 20px 0;
+}
+
+.probability-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.prob-label {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  min-width: 60px;
+}
+
+.prob-bar {
+  flex: 1;
+  height: 8px;
+  background: rgba(0, 0, 0, 0.08);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.prob-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Metrics Preview */
+.metrics-preview {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.metric-preview-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 12px;
+  background: rgba(184, 163, 255, 0.08);
+  border-radius: 12px;
+  border: 1px solid rgba(184, 163, 255, 0.15);
+}
+
+.metric-label {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.metric-val {
+  display: block;
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.prob-value {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  min-width: 40px;
+  text-align: right;
+}
+
+/* Cluster Display */
+.cluster-display {
+  text-align: center;
+  margin: 24px 0;
+}
+
+.cluster-number {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 12px;
+}
+
+.deviation-score {
+  height: 12px;
+  background: rgba(0, 0, 0, 0.08);
+  border-radius: 6px;
+  overflow: hidden;
+  margin: 16px 0;
+}
+
+.score-bar {
+  height: 100%;
+  border-radius: 6px;
+  transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.score-label {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  margin-top: 8px;
+}
+
+/* Stats Grid */
+.stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin: 20px 0;
+}
+
+.stat-box {
+  background: rgba(0, 0, 0, 0.03);
+  padding: 12px;
+  border-radius: 10px;
+  text-align: center;
+}
+
+.stat-label {
+  display: block;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
+.stat-value {
+  display: block;
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+@media (max-width: 768px) {
+  .insights-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .glass-card.featured {
+    grid-column: 1;
+  }
+  
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+}
