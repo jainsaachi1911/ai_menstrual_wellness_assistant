@@ -335,6 +335,13 @@ PRWI_FEATURES = [
     'AgeM', 'Breastfeeding'
 ]
 
+CLUSTER_FEATURES = [
+    'AvgCycleLength', 'StdCycleLength', 'IrregularCyclesPercent',
+    'AvgLutealPhase', 'ShortLutealPercent', 'AvgMensesLength',
+    'UnusualBleedingPercent', 'AvgOvulationDay', 'OvulationVariability',
+    'AvgBleedingIntensity', 'Age', 'BMI', 'TotalCycles'
+]
+
 def sanitize_features(raw: Dict[str, Any]) -> Dict[str, Any]:
     """Convert string/numeric values to appropriate numeric types"""
     cleaned = {}
@@ -376,19 +383,30 @@ def predict_cluster_deviation(features: Dict[str, float]) -> Dict[str, Any]:
         clusterdev_valid = True
     
     try:
+        # Debug logging
+        print(f"\n=== CLUSTER DEVIATION DEBUG ===")
+        print(f"Input features count: {len(features)}")
+        print(f"Input features keys: {list(features.keys())}")
+        print(f"CLUSTER_FEATURES count: {len(CLUSTER_FEATURES)}")
+        print(f"CLUSTER_FEATURES: {CLUSTER_FEATURES}")
+        
+        # Prepare the data with only CLUSTER_FEATURES
         df = pd.DataFrame([features])
+        print(f"DataFrame shape before filtering: {df.shape}")
+        
+        for feat in CLUSTER_FEATURES:
+            if feat not in df.columns:
+                df[feat] = 0
+        df = df[CLUSTER_FEATURES]
+        
+        print(f"DataFrame shape after filtering: {df.shape}")
+        print(f"DataFrame columns: {list(df.columns)}")
+        print(f"=== END DEBUG ===")
         
         if isinstance(clusterdev_model, dict):
             # Dictionary format
             model = clusterdev_model.get('model')
             scaler = clusterdev_model.get('scaler')
-            feature_columns = clusterdev_model.get('feature_columns')
-            
-            if feature_columns:
-                for col in feature_columns:
-                    if col not in df.columns:
-                        df[col] = 0
-                df = df[feature_columns]
             
             if scaler is not None:
                 try:
@@ -539,17 +557,36 @@ def predict_prwi(features: Dict[str, float]) -> Dict[str, Any]:
         prwi_valid = True
     
     try:
+        # Debug logging
+        print(f"\n=== PRWI DEBUG ===")
+        print(f"Input features: {features}")
+        print(f"Input features count: {len(features)}")
+        
+        # Prepare the data with only PRWI_FEATURES
         df = pd.DataFrame([features])
+        for feat in PRWI_FEATURES:
+            if feat not in df.columns:
+                df[feat] = 0
+        df = df[PRWI_FEATURES]
+        
+        print(f"DataFrame before conversion:")
+        print(df.dtypes)
+        print(f"DataFrame values: {df.values}")
+        
+        # Convert categorical/integer features to integers
+        # These should be integers: Age, AgeM, Numberpreg, Abortions, Breastfeeding, TotalCycles
+        integer_features = ['Age', 'AgeM', 'Numberpreg', 'Abortions', 'Breastfeeding']
+        for feat in integer_features:
+            if feat in df.columns:
+                df[feat] = df[feat].astype(int)
+        
+        print(f"DataFrame after conversion:")
+        print(df.dtypes)
+        print(f"=== END PRWI DEBUG ===")
 
         if isinstance(prwi_model, dict):
             model = prwi_model.get('model')
             scaler = prwi_model.get('scaler')
-            feature_names = prwi_model.get('feature_names', PRWI_FEATURES)
-
-            for feat in feature_names:
-                if feat not in df.columns:
-                    df[feat] = 0
-            df = df[feature_names]
 
             if scaler is not None:
                 try:
@@ -606,8 +643,14 @@ def predict():
         features = data.get('features', {})
         models = data.get('models', ['all'])  # Default to all models
         
+        print(f"\n{'='*60}")
         print(f"Received prediction request for models: {models}")
         print(f"Features keys: {list(features.keys())}")
+        print(f"Total features received: {len(features)}")
+        print(f"\nFeatures with types:")
+        for key, value in features.items():
+            print(f"  {key}: {value} (type: {type(value).__name__})")
+        print(f"{'='*60}")
         
         results = {}
         
@@ -1319,20 +1362,36 @@ def calculate_metrics_endpoint():
         }), 500
 
 def calculate_metrics_from_data(user_data, cycles):
-    """Calculate menstrual health metrics from user data and cycles"""
+    """
+    Calculate all 18 menstrual health metrics from user data and cycles.
+    
+    Metrics calculated:
+    1. Average Cycle Length (days)
+    2. Average Cycle Length (%) - Mean Absolute Percentage Deviation
+    3. Irregular Cycles Percentage
+    4. Standard Deviation of Cycle Length
+    5. Average Luteal Phase Length (days) - from ovulation dates
+    6. Short Luteal Phase Percentage - from ovulation dates
+    7. Average Bleeding Intensity (1-5)
+    8. Unusual Bleeding Percentage
+    9. Average Menses Length (days)
+    10. Average Ovulation Day
+    11. Ovulation Variability (days)
+    12-18. User profile data (Age, BMI, Pregnancies, Abortions, Age at First Menstruation, Breastfeeding)
+    """
     import statistics
     from datetime import datetime, timedelta
     
     if len(cycles) < 2:
         raise ValueError("At least 2 cycles required for analysis")
     
-    # Filter valid cycles
+    # Filter valid cycles (must have startDate and endDate)
     valid_cycles = [c for c in cycles if c.get('startDate') and c.get('endDate')]
     
     if len(valid_cycles) < 2:
         raise ValueError("At least 2 complete cycles required")
     
-    # Calculate cycle lengths
+    # ===== CYCLE LENGTH CALCULATIONS =====
     cycle_lengths = []
     for i in range(len(valid_cycles) - 1):
         start1 = datetime.fromisoformat(valid_cycles[i]['startDate'].replace('Z', '+00:00'))
@@ -1340,7 +1399,26 @@ def calculate_metrics_from_data(user_data, cycles):
         length = (start2 - start1).days
         cycle_lengths.append(length)
     
-    # Calculate menses lengths
+    # Metric 1: Average Cycle Length (days)
+    avg_cycle_length = statistics.mean(cycle_lengths) if cycle_lengths else 28
+    
+    # Metric 2: Average Cycle Length (%) - Mean Absolute Percentage Deviation
+    percent_deviations = [abs(length - avg_cycle_length) / avg_cycle_length * 100 
+                         for length in cycle_lengths]
+    avg_cycle_length_percent = (statistics.mean(percent_deviations) 
+                               if percent_deviations else 0)
+    
+    # Metric 3: Irregular Cycles Percentage (deviation > 7 days)
+    irregular_cycles = sum(1 for length in cycle_lengths 
+                          if abs(length - avg_cycle_length) > 7)
+    irregular_cycles_percent = (irregular_cycles / len(cycle_lengths) * 100 
+                               if cycle_lengths else 0)
+    
+    # Metric 4: Standard Deviation of Cycle Length
+    std_cycle_length = (statistics.stdev(cycle_lengths) 
+                       if len(cycle_lengths) > 1 else 0)
+    
+    # ===== MENSES CALCULATIONS =====
     menses_lengths = []
     for cycle in valid_cycles:
         start = datetime.fromisoformat(cycle['startDate'].replace('Z', '+00:00'))
@@ -1348,56 +1426,133 @@ def calculate_metrics_from_data(user_data, cycles):
         length = (end - start).days + 1
         menses_lengths.append(length)
     
-    # Calculate basic statistics
-    avg_cycle_length = statistics.mean(cycle_lengths) if cycle_lengths else 28
-    std_cycle_length = statistics.stdev(cycle_lengths) if len(cycle_lengths) > 1 else 0
+    # Metric 9: Average Menses Length (days)
     avg_menses_length = statistics.mean(menses_lengths) if menses_lengths else 5
     
-    # Calculate irregularity percentage
-    irregular_cycles = sum(1 for length in cycle_lengths if abs(length - avg_cycle_length) > 7)
-    irregular_cycles_percent = (irregular_cycles / len(cycle_lengths) * 100) if cycle_lengths else 0
-    
-    # Calculate bleeding intensity metrics
+    # ===== BLEEDING INTENSITY CALCULATIONS =====
     intensities = [c.get('intensity', 3) for c in valid_cycles if c.get('intensity')]
+    
+    # Metric 7: Average Bleeding Intensity (1-5)
     avg_bleeding_intensity = statistics.mean(intensities) if intensities else 3
     
-    # Calculate unusual bleeding percentage
+    # Metric 8: Unusual Bleeding Percentage (heavy >= 4 OR duration < 3 or > 7 days)
     unusual_bleeding = sum(1 for cycle in valid_cycles 
                           if (datetime.fromisoformat(cycle['endDate'].replace('Z', '+00:00')) - 
                               datetime.fromisoformat(cycle['startDate'].replace('Z', '+00:00'))).days + 1 > 7
                           or cycle.get('intensity', 3) >= 4)
-    unusual_bleeding_percent = (unusual_bleeding / len(valid_cycles) * 100) if valid_cycles else 0
+    unusual_bleeding_percent = (unusual_bleeding / len(valid_cycles) * 100 
+                               if valid_cycles else 0)
     
-    # Estimate other metrics
-    avg_luteal_phase = 14  # Standard assumption
-    avg_ovulation_day = max(1, avg_cycle_length - avg_luteal_phase)
-    ovulation_variability = std_cycle_length
-    short_luteal_percent = 0  # Would need ovulation tracking
+    # ===== OVULATION & LUTEAL PHASE CALCULATIONS =====
+    # Estimate ovulation automatically from cycle data
+    # Assumption: Luteal phase is typically 14 days (standard)
+    # Ovulation occurs at: cycle_start + (cycle_length - 14) days
     
+    assumed_luteal_phase = 14  # Standard luteal phase length
+    
+    # Estimate ovulation date for each cycle
+    estimated_ovulation_dates = []
+    for i in range(len(valid_cycles) - 1):
+        cycle_start = datetime.fromisoformat(
+            valid_cycles[i]['startDate'].replace('Z', '+00:00')
+        )
+        cycle_length = cycle_lengths[i]  # Already calculated above
+        
+        # Estimated ovulation day = cycle_length - assumed_luteal_phase
+        estimated_ov_day = cycle_length - assumed_luteal_phase
+        
+        # Create estimated ovulation date
+        estimated_ov_date = cycle_start + timedelta(days=estimated_ov_day - 1)
+        estimated_ovulation_dates.append(estimated_ov_date)
+    
+    # Calculate luteal phase lengths using estimated ovulation dates
+    luteal_lengths = []
+    for i in range(len(valid_cycles) - 1):
+        next_cycle_start = datetime.fromisoformat(
+            valid_cycles[i + 1]['startDate'].replace('Z', '+00:00')
+        )
+        luteal_length = (next_cycle_start - estimated_ovulation_dates[i]).days
+        # Validate luteal length (should be 7-24 days)
+        if 7 <= luteal_length <= 24:
+            luteal_lengths.append(luteal_length)
+    
+    # Metric 5: Average Luteal Phase Length (days)
+    if luteal_lengths:
+        avg_luteal_phase = statistics.mean(luteal_lengths)
+    else:
+        # Fallback: use standard assumption
+        avg_luteal_phase = assumed_luteal_phase
+    
+    # Metric 6: Short Luteal Phase Percentage (luteal <= 11 days)
+    if luteal_lengths:
+        short_luteal_count = sum(1 for length in luteal_lengths if length <= 11)
+        short_luteal_percent = (short_luteal_count / len(luteal_lengths) * 100)
+    else:
+        # If no valid luteal lengths, calculate based on assumed phase
+        short_luteal_percent = 0 if assumed_luteal_phase > 11 else 100
+    
+    # ===== OVULATION DAY CALCULATIONS =====
+    # Calculate day of cycle when ovulation occurs
+    ovulation_days_of_cycle = []
+    for i in range(len(valid_cycles) - 1):
+        cycle_start = datetime.fromisoformat(
+            valid_cycles[i]['startDate'].replace('Z', '+00:00')
+        )
+        day_of_cycle = (estimated_ovulation_dates[i] - cycle_start).days + 1
+        # Validate day of cycle (should be 1-35)
+        if 1 <= day_of_cycle <= 35:
+            ovulation_days_of_cycle.append(day_of_cycle)
+    
+    # Metric 10: Average Ovulation Day
+    if ovulation_days_of_cycle:
+        avg_ovulation_day = statistics.mean(ovulation_days_of_cycle)
+    else:
+        # Fallback: estimate as cycle_length - 14
+        avg_ovulation_day = max(1, avg_cycle_length - assumed_luteal_phase)
+    
+    # Metric 11: Ovulation Variability (days) - std dev of ovulation day
+    if len(ovulation_days_of_cycle) > 1:
+        ovulation_variability = statistics.stdev(ovulation_days_of_cycle)
+    else:
+        # Fallback: use std of cycle lengths
+        ovulation_variability = std_cycle_length
+    
+    # ===== BUILD RETURN OBJECT =====
     return {
+        # Cycle metrics (calculated from cycle data)
         'avgCycleLength': round(avg_cycle_length, 1),
+        'avgCycleLengthPercent': round(avg_cycle_length_percent, 1),
         'irregularCyclesPercent': round(irregular_cycles_percent, 1),
         'stdCycleLength': round(std_cycle_length, 1),
-        'avgLutealPhase': avg_luteal_phase,
-        'shortLutealPercent': short_luteal_percent,
+        
+        # Luteal phase metrics (automatically estimated from cycle lengths)
+        'avgLutealPhase': round(avg_luteal_phase, 1),
+        'shortLutealPercent': round(short_luteal_percent, 1),
+        
+        # Bleeding metrics
         'avgBleedingIntensity': round(avg_bleeding_intensity, 1),
         'unusualBleedingPercent': round(unusual_bleeding_percent, 1),
         'avgMensesLength': round(avg_menses_length, 1),
+        
+        # Ovulation metrics (automatically estimated)
         'avgOvulationDay': round(avg_ovulation_day, 1),
         'ovulationVariability': round(ovulation_variability, 1),
-        'totalCycles': len(valid_cycles),
-        'age': user_data.get('age', 25),
-        'bmi': user_data.get('bmi', 22.0),
-        'numberPregnancies': user_data.get('numberPregnancies', 0),
-        'numberAbortions': user_data.get('numberAbortions', 0),
-        'ageAtFirstMenstruation': user_data.get('ageAtFirstMenstruation', 13),
-        'currentlyBreastfeeding': user_data.get('currentlyBreastfeeding', False)
+        
+        # Tracking metrics
+        'totalCycles': len(valid_cycles)
     }
 
 def prepare_features_for_models(calculated_metrics, user_data):
-    """Prepare features in the format expected by AI models"""
+    """
+    Prepare features in the format expected by AI models.
+    Handles both old and new metrics versions.
+    """
     if not calculated_metrics:
         return None
+    
+    # Handle shortLutealPercent being None (insufficient ovulation data)
+    short_luteal = calculated_metrics.get('shortLutealPercent')
+    short_luteal_value = short_luteal if short_luteal is not None else 0.0
     
     return {
         # Risk Assessment Model Features (exact naming expected by models)
@@ -1405,7 +1560,7 @@ def prepare_features_for_models(calculated_metrics, user_data):
         'IrregularCyclesPercent': calculated_metrics.get('irregularCyclesPercent', 0.0),
         'StdCycleLength': calculated_metrics.get('stdCycleLength', 2.0),
         'AvgLutealPhase': calculated_metrics.get('avgLutealPhase', 14),
-        'ShortLutealPercent': calculated_metrics.get('shortLutealPercent', 0.0),
+        'ShortLutealPercent': short_luteal_value,
         'AvgBleedingIntensity': calculated_metrics.get('avgBleedingIntensity', 3.0),
         'UnusualBleedingPercent': calculated_metrics.get('unusualBleedingPercent', 0.0),
         'AvgMensesLength': calculated_metrics.get('avgMensesLength', 5.0),

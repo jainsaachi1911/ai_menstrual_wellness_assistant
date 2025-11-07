@@ -16,7 +16,7 @@ import {
 import { Line, Doughnut, Bar, PolarArea } from 'react-chartjs-2';
 import { auth } from '../services/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
-import { getUserProfile, saveAnalysisMetrics, getAnalyses, getCycles, addAnalysis } from '../services/firestore';
+import { getUserProfile, saveAnalysisMetrics, getAnalyses, getCycles, addAnalysis, getMetrics } from '../services/firestore';
 import {
   Activity,
   Brain,
@@ -85,19 +85,22 @@ const Analysis = () => {
 
   const loadUserData = async (uid) => {
     try {
-      const [profile, userCycles, analyses] = await Promise.all([
+      const [profile, userCycles, analyses, metrics] = await Promise.all([
         getUserProfile(uid),
         getCycles(uid),
-        getAnalyses(uid)
+        getAnalyses(uid),
+        getMetrics(uid)
       ]);
       
       setUserProfile(profile);
       setCycles(userCycles || []);
       setAnalysisHistory(analyses || []);
       
-      if (profile?.analysisMetrics) {
-        setAnalysisMetrics(profile.analysisMetrics);
-        await runModelPredictions(profile.analysisMetrics);
+      // Use metrics from Firestore if available, otherwise fall back to profile
+      const metricsToUse = metrics || profile?.analysisMetrics;
+      if (metricsToUse) {
+        setAnalysisMetrics(metricsToUse);
+        await runModelPredictions(metricsToUse);
       }
     } catch (error) {
       console.error('Error loading user data:', error);
@@ -167,25 +170,35 @@ const Analysis = () => {
     if (!metrics) return;
     
     try {
+      console.log('Running model predictions with metrics:', metrics);
+      console.log('User profile:', userProfile);
+      
+      // Use PascalCase field names from Firestore metrics
       const features = {
-        AvgCycleLength: metrics.avgCycleLength,
-        IrregularCyclesPercent: metrics.irregularCyclesPercent,
-        StdCycleLength: metrics.stdCycleLength,
-        AvgLutealPhase: metrics.avgLutealPhase,
-        ShortLutealPercent: metrics.shortLutealPercent,
-        AvgBleedingIntensity: metrics.avgBleedingIntensity,
-        UnusualBleedingPercent: metrics.unusualBleedingPercent,
-        AvgMensesLength: metrics.avgMensesLength,
-        AvgOvulationDay: metrics.avgOvulationDay,
-        OvulationVariability: metrics.ovulationVariability,
-        Age: metrics.age,
-        BMI: metrics.bmi,
-        TotalCycles: metrics.totalCycles,
-        Numberpreg: metrics.numberPregnancies,
-        Abortions: metrics.numberAbortions,
-        AgeM: metrics.ageAtFirstMenstruation,
-        Breastfeeding: metrics.currentlyBreastfeeding ? 1 : 0
+        // Cycle metrics (from Firestore - PascalCase)
+        AvgCycleLength: metrics.AvgCycleLength || metrics.avgCycleLength || 0,
+        AvgCycleLengthPercent: metrics.AvgCycleLengthPercent || metrics.avgCycleLengthPercent || 0,
+        IrregularCyclesPercent: metrics.IrregularCyclesPercent || metrics.irregularCyclesPercent || 0,
+        StdCycleLength: metrics.StdCycleLength || metrics.stdCycleLength || 0,
+        AvgLutealPhase: metrics.AvgLutealPhase || metrics.avgLutealPhase || 0,
+        ShortLutealPercent: metrics.ShortLutealPercent || metrics.shortLutealPercent || 0,
+        AvgBleedingIntensity: metrics.AvgBleedingIntensity || metrics.avgBleedingIntensity || 0,
+        UnusualBleedingPercent: metrics.UnusualBleedingPercent || metrics.unusualBleedingPercent || 0,
+        AvgMensesLength: metrics.AvgMensesLength || metrics.avgMensesLength || 0,
+        AvgOvulationDay: metrics.AvgOvulationDay || metrics.avgOvulationDay || 0,
+        OvulationVariability: metrics.OvulationVariability || metrics.ovulationVariability || 0,
+        TotalCycles: metrics.TotalCycles || metrics.totalCycles || 0,
+        
+        // Personal health data (from userProfile)
+        Age: userProfile?.age || 0,
+        BMI: userProfile?.bmi || 0,
+        Numberpreg: userProfile?.numberPregnancies || 0,
+        Abortions: userProfile?.numberAbortions || 0,
+        AgeM: userProfile?.ageAtFirstMenstruation || 0,
+        Breastfeeding: userProfile?.currentlyBreastfeeding ? 1 : 0
       };
+      
+      console.log('Features being sent to models:', features);
 
       const response = await fetch(`${API_BASE_URL}/api/predict`, {
         method: 'POST',
@@ -196,6 +209,7 @@ const Analysis = () => {
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
 
       const data = await response.json();
+      console.log('Model predictions response:', data);
 
       if (data.success) {
         setModelPredictions(data.results);
@@ -424,10 +438,10 @@ const Analysis = () => {
                       <Calendar size={24} />
                     </div>
                     <div className="metric-info">
-                      <div className="metric-value">{analysisMetrics.avgCycleLength}</div>
+                      <div className="metric-value">{(analysisMetrics.AvgCycleLength || analysisMetrics.avgCycleLength || 0)}</div>
                       <div className="metric-label">Avg Cycle Length (days)</div>
-                      <div className={`metric-status ${analysisMetrics.avgCycleLength >= 21 && analysisMetrics.avgCycleLength <= 35 ? 'good' : 'warning'}`}>
-                        {analysisMetrics.avgCycleLength >= 21 && analysisMetrics.avgCycleLength <= 35 ? 'Normal Range' : 'Outside Range'}
+                      <div className={`metric-status ${(analysisMetrics.AvgCycleLength || analysisMetrics.avgCycleLength || 0) >= 21 && (analysisMetrics.AvgCycleLength || analysisMetrics.avgCycleLength || 0) <= 35 ? 'good' : 'warning'}`}>
+                        {(analysisMetrics.AvgCycleLength || analysisMetrics.avgCycleLength || 0) >= 21 && (analysisMetrics.AvgCycleLength || analysisMetrics.avgCycleLength || 0) <= 35 ? 'Normal Range' : 'Outside Range'}
                       </div>
                     </div>
                   </motion.div>
@@ -442,10 +456,10 @@ const Analysis = () => {
                       <Activity size={24} />
                     </div>
                     <div className="metric-info">
-                      <div className="metric-value">{(100 - analysisMetrics.irregularCyclesPercent).toFixed(0)}%</div>
+                      <div className="metric-value">{(100 - (analysisMetrics.IrregularCyclesPercent || analysisMetrics.irregularCyclesPercent || 0)).toFixed(0)}%</div>
                       <div className="metric-label">Cycle Regularity</div>
-                      <div className={`metric-status ${analysisMetrics.irregularCyclesPercent < 20 ? 'good' : 'warning'}`}>
-                        {analysisMetrics.irregularCyclesPercent < 20 ? 'Highly Regular' : 'Variable'}
+                      <div className={`metric-status ${(analysisMetrics.IrregularCyclesPercent || analysisMetrics.irregularCyclesPercent || 0) < 20 ? 'good' : 'warning'}`}>
+                        {(analysisMetrics.IrregularCyclesPercent || analysisMetrics.irregularCyclesPercent || 0) < 20 ? 'Highly Regular' : 'Variable'}
                       </div>
                     </div>
                   </motion.div>
@@ -460,10 +474,10 @@ const Analysis = () => {
                       <Droplet size={24} />
                     </div>
                     <div className="metric-info">
-                      <div className="metric-value">{analysisMetrics.avgBleedingIntensity.toFixed(1)}/5</div>
+                      <div className="metric-value">{(analysisMetrics.AvgBleedingIntensity || analysisMetrics.avgBleedingIntensity || 0).toFixed(1)}/5</div>
                       <div className="metric-label">Avg Flow Intensity</div>
-                      <div className={`metric-status ${analysisMetrics.avgBleedingIntensity >= 2 && analysisMetrics.avgBleedingIntensity <= 4 ? 'good' : 'warning'}`}>
-                        {analysisMetrics.avgBleedingIntensity >= 2 && analysisMetrics.avgBleedingIntensity <= 4 ? 'Normal' : 'Atypical'}
+                      <div className={`metric-status ${(analysisMetrics.AvgBleedingIntensity || analysisMetrics.avgBleedingIntensity || 0) >= 2 && (analysisMetrics.AvgBleedingIntensity || analysisMetrics.avgBleedingIntensity || 0) <= 4 ? 'good' : 'warning'}`}>
+                        {(analysisMetrics.AvgBleedingIntensity || analysisMetrics.avgBleedingIntensity || 0) >= 2 && (analysisMetrics.AvgBleedingIntensity || analysisMetrics.avgBleedingIntensity || 0) <= 4 ? 'Normal' : 'Atypical'}
                       </div>
                     </div>
                   </motion.div>
@@ -494,6 +508,27 @@ const Analysis = () => {
               {/* AI Insights Section */}
               {modelPredictions ? (
                 <div className="insights-grid" style={{ marginTop: '30px' }}>
+                  {/* PRWI Wellness Score */}
+                  {modelPredictions.prwi_score && !modelPredictions.prwi_score.error && (
+                    <motion.div 
+                      className="insight-card prwi"
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 0.4 }}
+                    >
+                      <div className="card-badge">PRWI Wellness Score</div>
+                      <div className="card-body">
+                        <div className="insight-header">
+                          <Sparkles size={32} />
+                          <div className="prwi-score">{modelPredictions.prwi_score.prwi_score?.toFixed(1) || '--'}/100</div>
+                        </div>
+                        <div className="insight-text">
+                          <p>{modelPredictions.prwi_score.interpretation || 'Personalized Reproductive Wellness Index'}</p>
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+
                   {/* Risk Assessment */}
                   {modelPredictions.risk_assessment && !modelPredictions.risk_assessment.error && (
                     <motion.div 
@@ -552,6 +587,16 @@ const Analysis = () => {
                   )}
                 </div>
               ) : null}
+
+              {/* Raw Model Output JSON */}
+              {modelPredictions && (
+                <div style={{ marginTop: '40px', padding: '20px', backgroundColor: '#f5f5f5', borderRadius: '8px', fontFamily: 'monospace', fontSize: '12px', overflow: 'auto', maxHeight: '400px' }}>
+                  <h3 style={{ marginTop: 0, marginBottom: '15px', fontFamily: 'sans-serif' }}>Raw Model Output (JSON)</h3>
+                  <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordWrap: 'break-word' }}>
+                    {JSON.stringify(modelPredictions, null, 2)}
+                  </pre>
+                </div>
+              )}
 
               {/* Empty State - Only show if no data at all */}
               {!analysisMetrics && !modelPredictions && (
@@ -695,22 +740,22 @@ const Analysis = () => {
                     <div className="metrics-row">
                       <MetricItem 
                         label="Average Cycle Length"
-                        value={`${analysisMetrics.avgCycleLength} days`}
-                        status={analysisMetrics.avgCycleLength >= 21 && analysisMetrics.avgCycleLength <= 35 ? 'good' : 'warning'}
+                        value={`${(analysisMetrics.AvgCycleLength || analysisMetrics.avgCycleLength || 0)} days`}
+                        status={(analysisMetrics.AvgCycleLength || analysisMetrics.avgCycleLength || 0) >= 21 && (analysisMetrics.AvgCycleLength || analysisMetrics.avgCycleLength || 0) <= 35 ? 'good' : 'warning'}
                       />
                       <MetricItem 
                         label="Cycle Variability (Std Dev)"
-                        value={`${analysisMetrics.stdCycleLength.toFixed(1)} days`}
-                        status={analysisMetrics.stdCycleLength < 3 ? 'good' : 'warning'}
+                        value={`${(analysisMetrics.StdCycleLength || analysisMetrics.stdCycleLength || 0).toFixed(1)} days`}
+                        status={(analysisMetrics.StdCycleLength || analysisMetrics.stdCycleLength || 0) < 3 ? 'good' : 'warning'}
                       />
                       <MetricItem 
                         label="Irregular Cycles"
-                        value={`${analysisMetrics.irregularCyclesPercent.toFixed(1)}%`}
-                        status={analysisMetrics.irregularCyclesPercent < 20 ? 'good' : 'warning'}
+                        value={`${(analysisMetrics.IrregularCyclesPercent || analysisMetrics.irregularCyclesPercent || 0).toFixed(1)}%`}
+                        status={(analysisMetrics.IrregularCyclesPercent || analysisMetrics.irregularCyclesPercent || 0) < 20 ? 'good' : 'warning'}
                       />
                       <MetricItem 
                         label="Total Cycles Tracked"
-                        value={analysisMetrics.totalCycles}
+                        value={analysisMetrics.TotalCycles || analysisMetrics.totalCycles || 0}
                         status="neutral"
                       />
                     </div>
@@ -722,18 +767,18 @@ const Analysis = () => {
                     <div className="metrics-row">
                       <MetricItem 
                         label="Average Menses Duration"
-                        value={`${analysisMetrics.avgMensesLength.toFixed(1)} days`}
-                        status={analysisMetrics.avgMensesLength >= 3 && analysisMetrics.avgMensesLength <= 7 ? 'good' : 'warning'}
+                        value={`${(analysisMetrics.AvgMensesLength || analysisMetrics.avgMensesLength || 0).toFixed(1)} days`}
+                        status={(analysisMetrics.AvgMensesLength || analysisMetrics.avgMensesLength || 0) >= 3 && (analysisMetrics.AvgMensesLength || analysisMetrics.avgMensesLength || 0) <= 7 ? 'good' : 'warning'}
                       />
                       <MetricItem 
                         label="Average Bleeding Intensity"
-                        value={`${analysisMetrics.avgBleedingIntensity.toFixed(1)}/5`}
-                        status={analysisMetrics.avgBleedingIntensity >= 2 && analysisMetrics.avgBleedingIntensity <= 4 ? 'good' : 'warning'}
+                        value={`${(analysisMetrics.AvgBleedingIntensity || analysisMetrics.avgBleedingIntensity || 0).toFixed(1)}/5`}
+                        status={(analysisMetrics.AvgBleedingIntensity || analysisMetrics.avgBleedingIntensity || 0) >= 2 && (analysisMetrics.AvgBleedingIntensity || analysisMetrics.avgBleedingIntensity || 0) <= 4 ? 'good' : 'warning'}
                       />
                       <MetricItem 
                         label="Unusual Bleeding Events"
-                        value={`${analysisMetrics.unusualBleedingPercent.toFixed(1)}%`}
-                        status={analysisMetrics.unusualBleedingPercent < 30 ? 'good' : 'warning'}
+                        value={`${(analysisMetrics.UnusualBleedingPercent || analysisMetrics.unusualBleedingPercent || 0).toFixed(1)}%`}
+                        status={(analysisMetrics.UnusualBleedingPercent || analysisMetrics.unusualBleedingPercent || 0) < 30 ? 'good' : 'warning'}
                       />
                     </div>
                   </div>
@@ -744,23 +789,23 @@ const Analysis = () => {
                     <div className="metrics-row">
                       <MetricItem 
                         label="Average Ovulation Day"
-                        value={`Day ${analysisMetrics.avgOvulationDay.toFixed(1)}`}
+                        value={`Day ${(analysisMetrics.AvgOvulationDay || analysisMetrics.avgOvulationDay || 0).toFixed(1)}`}
                         status="neutral"
                       />
                       <MetricItem 
                         label="Ovulation Variability"
-                        value={`${analysisMetrics.ovulationVariability.toFixed(1)} days`}
-                        status={analysisMetrics.ovulationVariability < 3 ? 'good' : 'warning'}
+                        value={`${(analysisMetrics.OvulationVariability || analysisMetrics.ovulationVariability || 0).toFixed(1)} days`}
+                        status={(analysisMetrics.OvulationVariability || analysisMetrics.ovulationVariability || 0) < 3 ? 'good' : 'warning'}
                       />
                       <MetricItem 
                         label="Average Luteal Phase"
-                        value={`${analysisMetrics.avgLutealPhase} days`}
-                        status={analysisMetrics.avgLutealPhase >= 12 ? 'good' : 'warning'}
+                        value={`${analysisMetrics.AvgLutealPhase || analysisMetrics.avgLutealPhase || 0} days`}
+                        status={(analysisMetrics.AvgLutealPhase || analysisMetrics.avgLutealPhase || 0) >= 12 ? 'good' : 'warning'}
                       />
                       <MetricItem 
                         label="Short Luteal Phase"
-                        value={`${analysisMetrics.shortLutealPercent.toFixed(1)}%`}
-                        status={analysisMetrics.shortLutealPercent < 20 ? 'good' : 'warning'}
+                        value={`${(analysisMetrics.ShortLutealPercent || analysisMetrics.shortLutealPercent || 0).toFixed(1)}%`}
+                        status={(analysisMetrics.ShortLutealPercent || analysisMetrics.shortLutealPercent || 0) < 20 ? 'good' : 'warning'}
                       />
                     </div>
                   </div>
@@ -771,22 +816,22 @@ const Analysis = () => {
                     <div className="metrics-row">
                       <MetricItem 
                         label="Age"
-                        value={`${analysisMetrics.age} years`}
+                        value={`${(userProfile?.age || analysisMetrics.age || '--')} years`}
                         status="neutral"
                       />
                       <MetricItem 
                         label="BMI (Body Mass Index)"
-                        value={analysisMetrics.bmi.toFixed(1)}
-                        status={analysisMetrics.bmi >= 18.5 && analysisMetrics.bmi <= 24.9 ? 'good' : 'warning'}
+                        value={(userProfile?.bmi || analysisMetrics.bmi || 0) ? (userProfile?.bmi || analysisMetrics.bmi || 0).toFixed(1) : '--'}
+                        status={(userProfile?.bmi || analysisMetrics.bmi || 0) >= 18.5 && (userProfile?.bmi || analysisMetrics.bmi || 0) <= 24.9 ? 'good' : 'warning'}
                       />
                       <MetricItem 
                         label="Age at First Menstruation"
-                        value={`${analysisMetrics.ageAtFirstMenstruation} years`}
+                        value={`${(userProfile?.ageAtFirstMenstruation || analysisMetrics.ageAtFirstMenstruation || '--')} years`}
                         status="neutral"
                       />
                       <MetricItem 
                         label="Number of Pregnancies"
-                        value={analysisMetrics.numberPregnancies}
+                        value={userProfile?.numberPregnancies || analysisMetrics.numberPregnancies || 0}
                         status="neutral"
                       />
                       <MetricItem 

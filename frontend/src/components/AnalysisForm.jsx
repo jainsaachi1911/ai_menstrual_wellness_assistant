@@ -1,6 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { auth } from '../services/firebase';
-import { addCycle, addAnalysis, getCycles } from '../services/firestore';
+import { onAuthStateChanged } from 'firebase/auth';
+import { deleteDoc, doc } from 'firebase/firestore';
+import { db } from '../services/firebase';
+import { addCycle, addAnalysis, getCycles, removeDuplicateCycles, addCycleWithDeduplication, saveMetrics, getMetrics } from '../services/firestore';
 import { 
   Activity, 
   Brain, 
@@ -75,7 +78,7 @@ const parseOvulationValue = (rawOv, cycleStartISO, nextCycleStartISO) => {
 };
 
 const AnalysisForm = () => {
-  // stored cycles keyed by month (YYYY-MM) — each entry { start, end, intensity, ovulation? }
+  // stored cycles keyed by month (YYYY-MM) — each entry { start, end, intensity, symptoms }
   const [cyclesMap, setCyclesMap] = useState({});
   const [cycles, setCycles] = useState([]);
 
@@ -84,7 +87,7 @@ const AnalysisForm = () => {
   const [tempEnd, setTempEnd] = useState('');
   const [tempIntensity, setTempIntensity] = useState('');
   // Default symptoms template so we can easily reset / clone
-  const initialSymptoms = {
+  const memoizedInitialSymptoms = useMemo(() => ({
     cramps: 0,        // 0-5 intensity
     headache: false,  // toggle
     fatigue: 0,       // 0-5 intensity
@@ -94,9 +97,23 @@ const AnalysisForm = () => {
     backPain: 0,      // 0-5 intensity
     acne: false,      // toggle
     cravings: 0       // 0-3 rating
-  };
+  }), []);
 
-  const [symptoms, setSymptoms] = useState(initialSymptoms);
+  // Helper function to ensure symptoms object is valid
+  const ensureValidSymptoms = useCallback((symptoms) => {
+    if (!symptoms || typeof symptoms !== 'object') {
+      console.log('Invalid symptoms, using defaults:', symptoms);
+      return memoizedInitialSymptoms;
+    }
+    // Merge with defaults to ensure all properties exist
+    const merged = { ...memoizedInitialSymptoms, ...symptoms };
+    console.log('Merged symptoms - defaults:', memoizedInitialSymptoms, 'saved:', symptoms, 'result:', merged);
+    return merged;
+  }, [memoizedInitialSymptoms]);
+
+  const [symptoms, setSymptoms] = useState(() => memoizedInitialSymptoms);
+  const [user, setUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
 
   const [formData, setFormData] = useState({
     AvgCycleLength: '',
@@ -122,54 +139,169 @@ const AnalysisForm = () => {
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState(null);
   const [error, setError] = useState(null);
+  const [notification, setNotification] = useState(null);
+  const cyclesLoadedRef = useRef(false);
+  const [cyclesLoaded, setCyclesLoaded] = useState(false);
+  const [formInitialized, setFormInitialized] = useState(false);
 
+  // Helper function to show notifications
+  const showNotification = (message, type = 'success', duration = 3000) => {
+    setNotification({ message, type });
+    setTimeout(() => setNotification(null), duration);
+  };
+
+  // Listen for authentication state changes
   useEffect(() => {
-    const key = getMonthKey(currentDate);
-    const saved = cyclesMap[key];
-    if (saved) {
-      setTempStart(saved.start || '');
-      setTempEnd(saved.end || '');
-      setTempIntensity(saved.intensity || '');
-      setSymptoms(saved.symptoms || initialSymptoms);
-    } else {
-      setTempStart('');
-      setTempEnd('');
-      setTempIntensity('');
-      setSymptoms(initialSymptoms);
-    }
-  }, [currentDate, cyclesMap]);
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      console.log('Auth state changed:', user ? 'User logged in' : 'No user');
+      setUser(user);
+      setAuthLoading(false);
+      
+      // Reset cycles when user logs out
+      if (!user) {
+        console.log('User logged out, resetting cycles');
+        setCyclesMap({});
+        setCyclesLoaded(false);
+        cyclesLoadedRef.current = false;
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
 
   // Load cycles from Firestore so calendar persists across visits
   useEffect(() => {
     const load = async () => {
-      if (!auth.currentUser) return;
+      if (!user || authLoading) {
+        console.log('No user or still loading auth:', { user, authLoading });
+        return;
+      }
+      
+      // Prevent loading cycles multiple times for the same user
+      if (cyclesLoadedRef.current === user.uid) {
+        console.log('Cycles already loaded for this user, skipping reload');
+        return;
+      }
+      
       try {
-        const list = await getCycles(auth.currentUser.uid);
-        // Build map keyed by YYYY-MM; for overlapping months, last write wins
+        console.log('Loading cycles from Firestore...');
+        const list = await getCycles(user.uid);
+        console.log('Cycles loaded:', list);
+        
+        // Build map keyed by YYYY-MM; prefer cycles with symptoms when duplicates exist
         const map = {};
         for (const c of list) {
           const startISO = c.startDate?.toDate?.() ? c.startDate.toDate().toISOString().slice(0,10) : c.startDate;
           const endISO = c.endDate?.toDate?.() ? c.endDate.toDate().toISOString().slice(0,10) : c.endDate;
+          console.log('Processing cycle:', { startISO, endISO, intensity: c.intensity, symptoms: c.symptoms, symptomsType: typeof c.symptoms });
           if (!startISO || !endISO) continue;
           const key = getMonthKey(new Date(startISO));
-          map[key] = {
+          
+          // Ensure symptoms is a valid object
+          let symptomsToStore = c.symptoms;
+          const hasSymptoms = symptomsToStore && typeof symptomsToStore === 'object';
+          if (!hasSymptoms) {
+            console.warn(`Invalid symptoms for ${key}, using defaults`);
+            symptomsToStore = memoizedInitialSymptoms;
+          }
+          
+          const newEntry = {
             start: startISO,
             end: endISO,
             intensity: c.intensity ? String(c.intensity) : (c.avgBleedingIntensity ? String(c.avgBleedingIntensity) : ''),
-            symptoms: c.symptoms || initialSymptoms,
+            symptoms: symptomsToStore,
+            id: c.id,
           };
+          
+          // If this month key doesn't exist yet, or if current entry has symptoms and existing doesn't, use current
+          const existingEntry = map[key];
+          const existingHasSymptoms = existingEntry && existingEntry.symptoms && typeof existingEntry.symptoms === 'object' && Object.keys(existingEntry.symptoms).length > 0;
+          const currentHasSymptoms = hasSymptoms && Object.keys(symptomsToStore).length > 0;
+          
+          if (!existingEntry || (currentHasSymptoms && !existingHasSymptoms)) {
+            map[key] = newEntry;
+            console.log(`Mapped cycle ${key}:`, { startISO, endISO, symptoms: symptomsToStore, preferred: !existingEntry ? 'first' : 'has_symptoms' });
+          } else if (existingEntry) {
+            console.log(`Skipped duplicate cycle ${key} (existing has symptoms: ${existingHasSymptoms}, current has symptoms: ${currentHasSymptoms})`);
+          }
         }
+        console.log('Built cyclesMap:', map);
         setCyclesMap(map);
-        setTimeout(buildCyclesFromMap, 0);
-      } catch (_) {
-        // ignore load errors for now
+        setCyclesLoaded(true);
+        cyclesLoadedRef.current = user.uid;
+        
+        // Note: Form fields will be populated by the form update effect
+        // after cyclesLoaded becomes true
+      } catch (error) {
+        console.error('Error loading cycles:', error);
       }
     };
     load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [user, authLoading, ensureValidSymptoms]);
 
-  const buildCyclesFromMap = () => {
+  // Build cycles array whenever cyclesMap changes
+  useEffect(() => {
+    buildCyclesFromMap();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cyclesMap, ensureValidSymptoms]);
+
+  // Monitor formData changes for debugging
+  useEffect(() => {
+    if (formData.AvgCycleLength || formData.IrregularCyclesPercent !== undefined) {
+      console.log('\n=== FORM DATA UPDATED ===');
+      console.log('AvgCycleLength:', formData.AvgCycleLength);
+      console.log('AvgCycleLengthPercent:', formData.AvgCycleLengthPercent);
+      console.log('IrregularCyclesPercent:', formData.IrregularCyclesPercent);
+      console.log('StdCycleLength:', formData.StdCycleLength);
+      console.log('AvgLutealPhase:', formData.AvgLutealPhase);
+      console.log('ShortLutealPercent:', formData.ShortLutealPercent);
+      console.log('AvgBleedingIntensity:', formData.AvgBleedingIntensity);
+      console.log('UnusualBleedingPercent:', formData.UnusualBleedingPercent);
+      console.log('AvgMensesLength:', formData.AvgMensesLength);
+      console.log('AvgOvulationDay:', formData.AvgOvulationDay);
+      console.log('OvulationVariability:', formData.OvulationVariability);
+      console.log('TotalCycles:', formData.TotalCycles);
+      console.log('=== END FORM DATA UPDATE ===\n');
+    }
+  }, [formData]);
+
+  // Update form fields when cyclesMap is loaded and currentDate changes
+  useEffect(() => {
+    // Only update form if cycles have been loaded from Firestore
+    if (!cyclesLoaded) {
+      console.log('Cycles not yet loaded, skipping form update');
+      return;
+    }
+    
+    const key = getMonthKey(currentDate);
+    console.log('Form update effect triggered - key:', key, 'cyclesLoaded:', cyclesLoaded);
+    console.log('Current cyclesMap keys:', Object.keys(cyclesMap));
+    const saved = cyclesMap[key];
+    console.log('Saved data for key:', saved);
+    if (saved) {
+      console.log('Setting form from saved data for', key);
+      setTempStart(saved.start || '');
+      setTempEnd(saved.end || '');
+      setTempIntensity(saved.intensity || '');
+      const symptomsToSet = ensureValidSymptoms(saved.symptoms);
+      console.log('Setting symptoms for month:', key);
+      console.log('Raw symptoms from DB:', JSON.stringify(saved.symptoms));
+      console.log('Validated symptoms to set:', JSON.stringify(symptomsToSet));
+      setSymptoms(symptomsToSet);
+      console.log('Form populated with symptoms for', key);
+    } else {
+      console.log('No saved data for', key, '- clearing form');
+      console.log('Available keys in cyclesMap:', Object.keys(cyclesMap));
+      console.log('Full cyclesMap:', JSON.stringify(cyclesMap, null, 2));
+      setTempStart('');
+      setTempEnd('');
+      setTempIntensity('');
+      setSymptoms(memoizedInitialSymptoms);
+      console.log('Form cleared, using initial symptoms');
+    }
+  }, [currentDate.getFullYear(), currentDate.getMonth(), cyclesMap, cyclesLoaded, ensureValidSymptoms, memoizedInitialSymptoms, user]);
+
+  const buildCyclesFromMap = useCallback(() => {
     const arr = Object.entries(cyclesMap).map(([month, obj]) => ({ month, ...obj }));
     arr.sort((a, b) => {
       if (a.start && b.start) return new Date(a.start) - new Date(b.start);
@@ -177,16 +309,34 @@ const AnalysisForm = () => {
     });
     setCycles(arr);
     return arr;
+  }, [cyclesMap, ensureValidSymptoms]);
+
+  const changeMonth = (offset) => {
+    const d = new Date(currentDate);
+    d.setMonth(d.getMonth() + offset);
+    console.log('Changing month to:', getMonthKey(d));
+    setCurrentDate(d);
   };
 
   const saveCurrentMonth = async () => {
     const key = getMonthKey(currentDate);
+    console.log('Saving cycle for key:', key, { start: tempStart, end: tempEnd, intensity: tempIntensity, symptoms: JSON.stringify(symptoms) });
+    
+    if (!tempStart || !tempEnd) {
+      showNotification('Please enter both start and end dates', 'error');
+      return;
+    }
+    
     setCyclesMap(prev => ({ ...prev, [key]: { start: tempStart, end: tempEnd, intensity: tempIntensity, symptoms } }));
     setTimeout(buildCyclesFromMap, 0);
+    
     try {
-      if (auth.currentUser && tempStart && tempEnd) {
+      if (user && tempStart && tempEnd) {
         const mensesLengthDays = diffInDays(tempStart, tempEnd) + 1;
-        await addCycle(auth.currentUser.uid, {
+        const symptomsToSave = { ...symptoms };
+        console.log('Saving to Firestore for month:', key);
+        console.log('Symptoms being saved:', JSON.stringify(symptomsToSave));
+        const result = await addCycleWithDeduplication(user.uid, {
           startDate: new Date(tempStart),
           endDate: new Date(tempEnd),
           monthKey: key,
@@ -194,40 +344,92 @@ const AnalysisForm = () => {
           bleedingByDay: null,
           unusualBleedingByDay: null,
           mensesLengthDays,
-          symptoms, // save monthly symptoms
+          symptoms: symptomsToSave,
         });
+        console.log('Cycle saved result:', result);
+        console.log('Cycle saved successfully for month:', key, 'with symptoms:', JSON.stringify(symptomsToSave));
+        
+        if (result.updated) {
+          showNotification('Cycle updated successfully with symptoms!', 'success');
+        } else {
+          showNotification('Cycle saved successfully with symptoms!', 'success');
+        }
       }
     } catch (e) {
-      // swallow for now; optionally surface a toast
+      console.error('Error saving cycle:', e);
+      showNotification(`Error saving cycle: ${e.message || 'Unknown error'}`, 'error', 5000);
     }
   };
 
-  const clearCurrentMonth = () => {
+  const clearCurrentMonth = async () => {
     const key = getMonthKey(currentDate);
+    
+    // Get the cycle ID to delete from Firestore
+    const cycleToDelete = cyclesMap[key];
+    
+    // Clear local state
     setCyclesMap(prev => { const copy = { ...prev }; delete copy[key]; return copy; });
-    setTempStart(''); setTempEnd(''); setTempIntensity(''); setSymptoms(initialSymptoms);
+    setTempStart('');
+    setTempEnd('');
+    setTempIntensity('');
+    setSymptoms(memoizedInitialSymptoms);
+    
+    // Delete from Firestore if cycle exists
+    if (user && cycleToDelete && cycleToDelete.id) {
+      try {
+        console.log('Deleting cycle from Firestore:', cycleToDelete.id);
+        const { deleteDoc } = await import('firebase/firestore');
+        const { db } = await import('../services/firebase');
+        await deleteDoc(doc(db, 'users', user.uid, 'cycles', cycleToDelete.id));
+        console.log('Cycle deleted successfully from Firestore');
+        showNotification('Month cleared and deleted from database', 'success');
+      } catch (error) {
+        console.error('Error deleting cycle from Firestore:', error);
+        showNotification('Month cleared locally but failed to delete from database', 'warning', 5000);
+      }
+    } else {
+      showNotification('Month cleared', 'info');
+    }
+    
     setTimeout(buildCyclesFromMap, 0);
   };
 
+
   const toggleSymptom = (symptom) => {
-    setSymptoms(prev => ({
-      ...prev,
-      [symptom]: !prev[symptom]
-    }));
+    console.log('Toggling symptom:', symptom, 'from', symptoms[symptom], 'to', !symptoms[symptom]);
+    setSymptoms(prev => {
+      const newSymptoms = {
+        ...prev,
+        [symptom]: !prev[symptom]
+      };
+      console.log('New symptoms state:', newSymptoms);
+      return newSymptoms;
+    });
   };
 
   const setSymptomIntensity = (symptom, value) => {
-    setSymptoms(prev => ({
-      ...prev,
-      [symptom]: value
-    }));
+    console.log('Setting symptom intensity:', symptom, 'to', value);
+    setSymptoms(prev => {
+      const newSymptoms = {
+        ...prev,
+        [symptom]: value
+      };
+      console.log('New symptoms state:', newSymptoms);
+      return newSymptoms;
+    });
   };
 
   const adjustSymptomIntensity = (symptom, delta) => {
-    setSymptoms(prev => ({
-      ...prev,
-      [symptom]: Math.max(0, Math.min(5, prev[symptom] + delta))
-    }));
+    const newValue = Math.max(0, Math.min(5, symptoms[symptom] + delta));
+    console.log('Adjusting symptom intensity:', symptom, 'from', symptoms[symptom], 'by', delta, 'to', newValue);
+    setSymptoms(prev => {
+      const newSymptoms = {
+        ...prev,
+        [symptom]: newValue
+      };
+      console.log('New symptoms state:', newSymptoms);
+      return newSymptoms;
+    });
   };
 
   const handleDayClick = (iso) => {
@@ -249,14 +451,8 @@ const AnalysisForm = () => {
     setTempEnd('');
   };
 
-  const changeMonth = (offset) => {
-    const d = new Date(currentDate);
-    d.setMonth(d.getMonth() + offset);
-    setCurrentDate(d);
-  };
-
   // MAIN: compute metrics
-  const computeMetrics = () => {
+  const computeMetrics = async () => {
     const arr = buildCyclesFromMap();
     const completed = arr.filter(c => c.start && c.end);
 
@@ -295,51 +491,48 @@ const AnalysisForm = () => {
       : 0;
 
     // Irregular cycles percent (threshold in days)
-    const irregularThreshold = 7;
-    const irregularCount = L.filter(li => Math.abs(li - avgCycle) >= irregularThreshold).length;
-    const irregularPercent = L.length > 0 ? (irregularCount / L.length) * 100 : 0;
+  const irregularThreshold = 7;
+  const irregularCount = L.filter(li => Math.abs(li - avgCycle) >= irregularThreshold).length;
+  const irregularPercent = L.length > 0 ? (irregularCount / L.length) * 100 : 0;
 
-    // Build luteal estimates using explicit ovulation where available,
-    // otherwise estimate ovulation using avgCycle - assumedLuteal heuristic.
-    const lutealEstimates = [];
+  const lutealEstimates = [];
 
-    for (let i = 0; i < completed.length - 1; i++) {
-      const thisCycle = completed[i];
-      const nextCycleStart = completed[i + 1].start; // string ISO
+  for (let i = 0; i < completed.length - 1; i++) {
+    const thisCycle = completed[i];
+    const nextCycleStart = completed[i + 1].start; // string ISO
 
-      // 1) If explicit ovulation provided, try to parse and validate it
-      let ovDate = null;
-      if (thisCycle.ovulation !== undefined && thisCycle.ovulation !== null && thisCycle.ovulation !== '') {
-        ovDate = parseOvulationValue(thisCycle.ovulation, thisCycle.start, nextCycleStart);
-        // only accept if valid and before next start
-        if (!ovDate || ovDate >= new Date(nextCycleStart)) {
-          ovDate = null;
-        }
+    // 1) If explicit ovulation provided, try to parse and validate it
+    let ovDate = null;
+    if (thisCycle.ovulation !== undefined && thisCycle.ovulation !== null && thisCycle.ovulation !== '') {
+      ovDate = parseOvulationValue(thisCycle.ovulation, thisCycle.start, nextCycleStart);
+      // only accept if valid and before next start
+      if (!ovDate || ovDate >= new Date(nextCycleStart)) {
+        ovDate = null;
       }
+    }
 
-      // 2) If no explicit ovulation, infer one reasonably:
-      //    estimateOvationOffset = round(avgCycle - assumedLuteal)
-      //    ovDate = cycleStart + estimateOvationOffset days
-      // This lets luteal vary with per-cycle L (final luteal becomes 14 + (li - avgCycle))
-      if (!ovDate) {
-        const estimateOffset = Math.round(avgCycle - assumedLuteal);
-        const candidate = new Date(thisCycle.start);
-        candidate.setDate(candidate.getDate() + estimateOffset);
-        // validation: must be after cycle start and before next start
-        if (candidate > new Date(thisCycle.start) && candidate < new Date(nextCycleStart)) {
-          ovDate = candidate;
+    // 2) If no explicit ovulation, infer one reasonably:
+    //    estimateOvationOffset = round(avgCycle - assumedLuteal)
+    //    ovDate = cycleStart + estimateOvationOffset days
+    // This lets luteal vary with per-cycle L (final luteal becomes 14 + (li - avgCycle))
+    if (!ovDate) {
+      const estimateOffset = Math.round(avgCycle - assumedLuteal);
+      const candidate = new Date(thisCycle.start);
+      candidate.setDate(candidate.getDate() + estimateOffset);
+      // validation: must be after cycle start and before next start
+      if (candidate > new Date(thisCycle.start) && candidate < new Date(nextCycleStart)) {
+        ovDate = candidate;
+      } else {
+        // if the estimate falls outside, try a safer fallback:
+        // choose middle point between cycle start and next start minus assumedLuteal/2
+        const li = diffInDays(thisCycle.start, nextCycleStart);
+        const fallbackOffset = Math.max(1, Math.round(li - assumedLuteal)); // day-of-cycle style
+        const fallback = new Date(thisCycle.start);
+        fallback.setDate(fallback.getDate() + fallbackOffset);
+        if (fallback > new Date(thisCycle.start) && fallback < new Date(nextCycleStart)) {
+          ovDate = fallback;
         } else {
-          // if the estimate falls outside, try a safer fallback:
-          // choose middle point between cycle start and next start minus assumedLuteal/2
-          const li = diffInDays(thisCycle.start, nextCycleStart);
-          const fallbackOffset = Math.max(1, Math.round(li - assumedLuteal)); // day-of-cycle style
-          const fallback = new Date(thisCycle.start);
-          fallback.setDate(fallback.getDate() + fallbackOffset);
-          if (fallback > new Date(thisCycle.start) && fallback < new Date(nextCycleStart)) {
-            ovDate = fallback;
-          } else {
-            ovDate = null;
-          }
+          ovDate = null;
         }
       }
 
@@ -349,6 +542,7 @@ const AnalysisForm = () => {
       if (Number.isFinite(lutealEstimate) && lutealEstimate >= 7 && lutealEstimate <= 24) {
         lutealEstimates.push(lutealEstimate);
       }
+    }
     }
 
     // Compute short luteal percentage: <= 11 days considered short (inclusive)
@@ -383,26 +577,88 @@ const AnalysisForm = () => {
 
     const unusualPercent = completed.length > 0 ? (unusualCount / completed.length) * 100 : 0;
 
-    // Update form fields (1 decimal)
-    setFormData(prev => ({
-      ...prev,
-      AvgCycleLength: Number.isFinite(avgCycle) ? avgCycle.toFixed(1) : '',
-      AvgCycleLengthPercent: Number.isFinite(avgPercentDeviation) ? avgPercentDeviation.toFixed(1) : '',
-      StdCycleLength: Number.isFinite(stdCycle) ? stdCycle.toFixed(1) : '',
-      AvgMensesLength: Number.isFinite(avgMenses) ? avgMenses.toFixed(1) : '',
+    // DEBUG: Log all calculated values
+    console.log('\n\n╔════════════════════════════════════════════════════════════════╗');
+    console.log('║         COMPREHENSIVE METRICS CALCULATION SUMMARY              ║');
+    console.log('╚════════════════════════════════════════════════════════════════╝');
+    console.log('\n📊 CYCLE DATA:');
+    console.log('  • Completed cycles:', completed.length);
+    console.log('  • Cycle lengths (L):', L);
+    console.log('  • Menses lengths (M):', M);
+    console.log('\n📈 CYCLE LENGTH METRICS:');
+    console.log('  • Average cycle length:', avgCycle.toFixed(1), 'days');
+    console.log('  • Std deviation:', stdCycle.toFixed(1), 'days');
+    console.log('  • Avg percent deviation:', avgPercentDeviation.toFixed(1), '%');
+    console.log('  • Irregular cycles percent:', irregularPercent.toFixed(1), '%');
+    console.log('\n🩸 BLEEDING METRICS:');
+    console.log('  • Average menses length:', avgMenses.toFixed(1), 'days');
+    console.log('  • Intensity values:', intensityValues);
+    console.log('  • Average bleeding intensity:', avgIntensity.toFixed(1));
+    console.log('  • Unusual bleeding percent:', unusualPercent.toFixed(1), '%');
+    console.log('\n🔄 OVULATION & LUTEAL METRICS:');
+    console.log('  • Ovulation days (of cycle):', ovDays);
+    console.log('  • Average ovulation day:', avgOvDay.toFixed(1));
+    console.log('  • Ovulation variability:', ovVar.toFixed(1), 'days');
+    console.log('  • Luteal estimates:', lutealEstimates);
+    console.log('  • Average luteal phase:', (lutealEstimates.length > 0 ? (lutealEstimates.reduce((a,b)=>a+b)/lutealEstimates.length).toFixed(1) : 'N/A'), 'days');
+    console.log('  • Short luteal percent:', shortLutealPercent !== null ? shortLutealPercent.toFixed(1) : 'N/A', '%');
+    console.log('\n╔════════════════════════════════════════════════════════════════╗');
+    console.log('║                      END SUMMARY                              ║');
+    console.log('╚════════════════════════════════════════════════════════════════╝\n');
+
+    // Prepare metrics object to save
+    const metricsToSave = {
+      AvgCycleLength: Number.isFinite(avgCycle) ? parseFloat(avgCycle.toFixed(1)) : null,
+      AvgCycleLengthPercent: Number.isFinite(avgPercentDeviation) ? parseFloat(avgPercentDeviation.toFixed(1)) : null,
+      StdCycleLength: Number.isFinite(stdCycle) ? parseFloat(stdCycle.toFixed(1)) : null,
+      AvgMensesLength: Number.isFinite(avgMenses) ? parseFloat(avgMenses.toFixed(1)) : null,
       TotalCycles: completed.length,
       AvgLutealPhase: lutealEstimates.length > 0
-        ? (lutealEstimates.reduce((a, b) => a + b, 0) / lutealEstimates.length).toFixed(1)
-        : assumedLuteal.toFixed(1),
-      AvgOvulationDay: Number.isFinite(avgOvDay) ? avgOvDay.toFixed(1) : '',
-      IrregularCyclesPercent: Number.isFinite(irregularPercent) ? irregularPercent.toFixed(1) : '',
+        ? parseFloat((lutealEstimates.reduce((a, b) => a + b, 0) / lutealEstimates.length).toFixed(1))
+        : parseFloat(assumedLuteal.toFixed(1)),
+      AvgOvulationDay: Number.isFinite(avgOvDay) ? parseFloat(avgOvDay.toFixed(1)) : null,
+      IrregularCyclesPercent: Number.isFinite(irregularPercent) ? parseFloat(irregularPercent.toFixed(1)) : null,
       ShortLutealPercent: shortLutealPercent !== null && Number.isFinite(shortLutealPercent)
-        ? shortLutealPercent.toFixed(1)
-        : '', // blank => insufficient luteal/ovulation data
-      OvulationVariability: Number.isFinite(ovVar) ? ovVar.toFixed(1) : '',
-      AvgBleedingIntensity: avgIntensity > 0 ? avgIntensity.toFixed(1) : '',
-      UnusualBleedingPercent: Number.isFinite(unusualPercent) ? unusualPercent.toFixed(1) : ''
+        ? parseFloat(shortLutealPercent.toFixed(1))
+        : null,
+      OvulationVariability: Number.isFinite(ovVar) ? parseFloat(ovVar.toFixed(1)) : null,
+      AvgBleedingIntensity: Number.isFinite(avgIntensity) ? parseFloat(avgIntensity.toFixed(1)) : null,
+      UnusualBleedingPercent: Number.isFinite(unusualPercent) ? parseFloat(unusualPercent.toFixed(1)) : null
+    };
+
+    // Update form fields (1 decimal) - use nullish coalescing to handle zero values
+    setFormData(prev => ({
+      ...prev,
+      AvgCycleLength: metricsToSave.AvgCycleLength ?? '',
+      AvgCycleLengthPercent: metricsToSave.AvgCycleLengthPercent ?? '',
+      StdCycleLength: metricsToSave.StdCycleLength ?? '',
+      AvgMensesLength: metricsToSave.AvgMensesLength ?? '',
+      TotalCycles: metricsToSave.TotalCycles,
+      AvgLutealPhase: metricsToSave.AvgLutealPhase ?? '',
+      AvgOvulationDay: metricsToSave.AvgOvulationDay ?? '',
+      IrregularCyclesPercent: metricsToSave.IrregularCyclesPercent ?? '',
+      ShortLutealPercent: metricsToSave.ShortLutealPercent ?? '',
+      OvulationVariability: metricsToSave.OvulationVariability ?? '',
+      AvgBleedingIntensity: metricsToSave.AvgBleedingIntensity ?? '',
+      UnusualBleedingPercent: metricsToSave.UnusualBleedingPercent ?? ''
     }));
+
+    // Save metrics to Firestore
+    if (user) {
+      try {
+        console.log('\n=== SAVING METRICS TO FIRESTORE ===');
+        console.log('Metrics to save:', JSON.stringify(metricsToSave, null, 2));
+        await saveMetrics(user.uid, metricsToSave);
+        console.log('Metrics saved successfully');
+        console.log('=== END SAVE ===\n');
+        showNotification('Metrics calculated and saved successfully!', 'success');
+      } catch (error) {
+        console.error('Error saving metrics:', error);
+        showNotification('Metrics calculated but failed to save to database', 'error', 5000);
+      }
+    } else {
+      showNotification('Metrics calculated (not saved - user not logged in)', 'info');
+    }
   };
 
   const handleChange = (e) => {
@@ -426,9 +682,9 @@ const AnalysisForm = () => {
       const payload = data.results || data;
       setResults(payload);
 
-      if (auth.currentUser) {
+      if (user) {
         try {
-          await addAnalysis(auth.currentUser.uid, {
+          await addAnalysis(user.uid, {
             inputFeatures: { ...formData },
             cyclesSnapshot: buildCyclesFromMap(),
             modelsRun: ["risk"],
@@ -487,6 +743,13 @@ const AnalysisForm = () => {
 
   return (
     <div className="analysis-form-container">
+      {/* Notification Toast */}
+      {notification && (
+        <div className={`notification notification-${notification.type}`}>
+          {notification.message}
+        </div>
+      )}
+
       {/* Welcoming Header */}
       <div className="calendar-header">
         <h2>Your Wellness Journey</h2>
@@ -588,6 +851,7 @@ const AnalysisForm = () => {
         <button type="button" onClick={saveCurrentMonth}>Save Month</button>
         <button type="button" onClick={clearCurrentMonth}>Clear Month</button>
         <button type="button" onClick={computeMetrics}>Calculate Metrics</button>
+        <button type="button" onClick={cleanupDuplicates} className="cleanup-btn">Clean Duplicates</button>
       </div>
     </div>
 
@@ -819,132 +1083,6 @@ const AnalysisForm = () => {
         </button>
       </div>
 
-    <form onSubmit={handleSubmit} className="analysis-form">
-        <div>
-          <div className="form-group">
-            <label htmlFor="AvgCycleLength">Average Cycle Length (days)</label>
-            <input type="number" id="AvgCycleLength" name="AvgCycleLength" value={formData.AvgCycleLength} readOnly />
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="AvgCycleLengthPercent">Average Cycle Length (%)</label>
-            <input type="number" id="AvgCycleLengthPercent" name="AvgCycleLengthPercent" value={formData.AvgCycleLengthPercent} readOnly />
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="IrregularCyclesPercent">Irregular Cycles Percentage</label>
-            <input type="number" id="IrregularCyclesPercent" name="IrregularCyclesPercent" value={formData.IrregularCyclesPercent} readOnly />
-            <small>Range: 0-100%</small>
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="StdCycleLength">Standard Deviation of Cycle Length</label>
-            <input type="number" id="StdCycleLength" name="StdCycleLength" value={formData.StdCycleLength} readOnly />
-            <small>Typical range: 0-10 days</small>
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="AvgLutealPhase">Average Luteal Phase Length (days)</label>
-            <input type="number" id="AvgLutealPhase" name="AvgLutealPhase" value={formData.AvgLutealPhase} readOnly />
-            <small>Typical range: 12-16 days</small>
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="ShortLutealPercent">Short Luteal Phase Percentage</label>
-            <input type="number" id="ShortLutealPercent" name="ShortLutealPercent" value={formData.ShortLutealPercent} readOnly />
-            <small>Range: 0-100% (blank = insufficient ovulation data)</small>
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="AvgBleedingIntensity">Average Bleeding Intensity (1-5)</label>
-            <input type="number" id="AvgBleedingIntensity" name="AvgBleedingIntensity" value={formData.AvgBleedingIntensity} readOnly />
-            <small>Range: 1 (light) to 5 (heavy)</small>
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="UnusualBleedingPercent">Unusual Bleeding Percentage</label>
-            <input type="number" id="UnusualBleedingPercent" name="UnusualBleedingPercent" value={formData.UnusualBleedingPercent} readOnly />
-            <small>Range: 0-100%</small>
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="AvgMensesLength">Average Menses Length (days)</label>
-            <input type="number" id="AvgMensesLength" name="AvgMensesLength" value={formData.AvgMensesLength} readOnly />
-            <small>Typical range: 3-7 days</small>
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="AvgOvulationDay">Average Ovulation Day</label>
-            <input type="number" id="AvgOvulationDay" name="AvgOvulationDay" value={formData.AvgOvulationDay} readOnly />
-            <small>Typical range: Day 11-21 of cycle</small>
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="OvulationVariability">Ovulation Variability (days)</label>
-            <input type="number" id="OvulationVariability" name="OvulationVariability" value={formData.OvulationVariability} readOnly />
-            <small>Typical range: 0-5 days</small>
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="Age">Age (years)</label>
-            <input type="number" id="Age" name="Age" value={formData.Age} onChange={handleChange} required />
-            <small>Range: 12-60 years</small>
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="BMI">BMI</label>
-            <input type="number" id="BMI" name="BMI" value={formData.BMI} onChange={handleChange} required />
-            <small>Typical range: 18.5-35</small>
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="TotalCycles">Total Cycles Tracked</label>
-            <input type="number" id="TotalCycles" name="TotalCycles" value={formData.TotalCycles} readOnly />
-            <small>Minimum: 3 cycles</small>
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="Numberpreg">Number of Pregnancies</label>
-            <input type="number" id="Numberpreg" name="Numberpreg" value={formData.Numberpreg} onChange={handleChange} required />
-            <small>Range: 0 or more</small>
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="Abortions">Number of Abortions</label>
-            <input type="number" id="Abortions" name="Abortions" value={formData.Abortions} onChange={handleChange} required />
-            <small>Range: 0 or more</small>
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="AgeM">Age at First Menstruation</label>
-            <input type="number" id="AgeM" name="AgeM" value={formData.AgeM} onChange={handleChange} required />
-            <small>Typical range: 9-16 years</small>
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="Breastfeeding">Currently Breastfeeding</label>
-            <input type="checkbox" id="Breastfeeding" name="Breastfeeding" checked={formData.Breastfeeding} onChange={handleChange} />
-          </div>
-        </div>
-
-        <div>
-          <button type="submit" disabled={loading}>{loading ? 'Analyzing...' : 'Analyze Health Data'}</button>
-        </div>
-    </form>
-
-    {error && <div className="error-message">{error}</div>}
-
-    {results && (
-      <div className="results-container">
-          <h3>Analysis Results</h3>
-          {Object.entries(results).map(([key, value]) => (
-            <div key={key}>
-              <strong>{key.replace(/_/g, ' ')}</strong>
-              <pre>{JSON.stringify(value, null, 2)}</pre>
-            </div>
-          ))}
-      </div>
-    )}
   </div>
   );
 };
