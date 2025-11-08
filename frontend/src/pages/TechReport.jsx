@@ -154,12 +154,7 @@ const TechReport = () => {
       <div className="qr-section">
         <div className="qr-box">
           <div className="qr-placeholder">
-            <svg viewBox="0 0 100 100" className="qr-icon">
-              <rect x="10" y="10" width="30" height="30" fill="none" stroke="currentColor" strokeWidth="2"/>
-              <rect x="60" y="10" width="30" height="30" fill="none" stroke="currentColor" strokeWidth="2"/>
-              <rect x="10" y="60" width="30" height="30" fill="none" stroke="currentColor" strokeWidth="2"/>
-              <circle cx="75" cy="75" r="15" fill="none" stroke="currentColor" strokeWidth="2"/>
-            </svg>
+            <img src="/QR Code.png" alt="GitHub Repository QR Code" className="qr-image" />
             <p>QR Code</p>
             <small>Scan to View Paper</small>
           </div>

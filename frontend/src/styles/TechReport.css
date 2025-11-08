@@ -83,6 +83,16 @@
   opacity: 0.8;
 }
 
+.qr-image {
+  width: 100%;
+  height: auto;
+  max-width: 200px;
+  max-height: 200px;
+  object-fit: contain;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
 .qr-placeholder p {
   font-size: 1.3rem;
   font-weight: 600;
