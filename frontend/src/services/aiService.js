@@ -6,11 +6,11 @@ You provide accurate, evidence-based information about menstruation, menstrual c
 You are respectful, non-judgmental, and supportive.
 If asked about serious medical concerns, you advise consulting a healthcare professional.`;
 
-// Use Vite env variable for Groq API key
-const apiKey = import.meta.env.VITE_GROQ_API_KEY;
-
 // Import OpenAI SDK (Groq compatible)
 import OpenAI from "openai";
+
+// Groq API key (hardcoded)
+const apiKey = "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";
 
 const client = new OpenAI({
   apiKey,

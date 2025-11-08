@@ -20,7 +20,7 @@
 .user-profile-container {
   min-height: 100vh;
   padding: 100px 0 60px 0;
-  background: #ffeef5;
+  background: linear-gradient(180deg, #ffffff 0%, #f5f7fb 100%);
   display: flex;
   justify-content: center;
   align-items: center;
@@ -32,12 +32,11 @@
 }
 
 .profile-card {
-  background: rgba(255, 255, 255, 0.75);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  border-radius: 28px;
-  box-shadow: 0 12px 40px rgba(184, 163, 255, 0.2),
-              0 0 0 1px rgba(255, 255, 255, 0.3) inset;
+  background: white;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-radius: 16px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
   width: calc(100% - 60px);
   max-width: 900px;
   padding: 40px 50px;
@@ -45,7 +44,7 @@
   animation: slideUp 0.6s ease-out;
   position: relative;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.4);
+  border: 1px solid #e2e8f0;
 }
 
 @keyframes slideUp {

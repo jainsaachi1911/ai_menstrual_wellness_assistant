@@ -4,7 +4,7 @@
 
 .home-container {
   min-height: 100vh;
-  background: linear-gradient(135deg, #f8f9ff 0%, #fff5f8 50%, #f8f9ff 100%);
+  background: linear-gradient(180deg, #ffffff 0%, #f5f7fb 50%, #ffffff 100%);
   font-family: 'Times New Roman', Times, serif;
   padding-top: 70px;
   overflow-x: hidden;
@@ -108,17 +108,21 @@
 .hero-main-title {
   font-size: 5.8rem;
   font-weight: 700;
-  color: #1a1a1a;
+  color: #0f172a;
   margin: 0 0 8px 0;
   line-height: 1.1;
   letter-spacing: -2px;
   font-family: 'Times New Roman', Times, serif;
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 .hero-description {
   font-size: 1.15rem;
-  color: #333333;
-  line-height: 1.6;
+  color: #475569;
+  line-height: 1.8;
   margin: 0 0 20px 0;
   width: 100%;
   max-width: 500px;
@@ -126,29 +130,30 @@
   margin-right: auto;
   margin-bottom: 20px;
   font-weight: 400;
+  letter-spacing: 0.3px;
 }
 
 /* Single CTA Button */
 .hero-cta-btn {
-  background: #4d7cff;
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
   color: white;
   border: none;
-  padding: 14px 28px;
-  font-size: 0.95rem;
+  padding: 16px 36px;
+  font-size: 1rem;
   font-weight: 600;
-  border-radius: 6px;
+  border-radius: 8px;
   cursor: pointer;
   transition: all 0.3s ease;
   font-family: 'Times New Roman', Times, serif;
-  box-shadow: 0 4px 15px rgba(77, 124, 255, 0.3);
+  box-shadow: 0 8px 25px rgba(59, 130, 246, 0.3);
   text-transform: none;
   letter-spacing: 0.5px;
 }
 
 .hero-cta-btn:hover {
-  background: #3d6cff;
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(77, 124, 255, 0.4);
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  transform: translateY(-3px);
+  box-shadow: 0 12px 35px rgba(59, 130, 246, 0.4);
 }
 
 @keyframes fadeInUp {
@@ -224,18 +229,20 @@
 .section-title {
   font-size: 3.5rem;
   font-weight: 700;
-  color: #1a1a1a;
+  color: #0f172a;
   text-align: center;
   margin: 0 0 20px 0;
   letter-spacing: -0.5px;
+  font-family: 'Times New Roman', Times, serif;
 }
 
 .section-description {
   font-size: 1.2rem;
-  color: #666;
+  color: #64748b;
   text-align: center;
   margin: 0 0 60px 0;
   width: 100%;
+  font-family: 'Times New Roman', Times, serif;
 }
 
 .features-grid {
@@ -248,19 +255,19 @@
 }
 
 .feature-card {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(248, 249, 255, 0.9));
-  border-radius: 24px;
+  background: white;
+  border-radius: 16px;
   padding: 40px 32px;
   text-align: center;
   transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-  border: 2px solid rgba(107, 158, 255, 0.1);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
 }
 
 .feature-card:hover {
-  transform: translateY(-10px);
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.1);
-  border-color: rgba(107, 158, 255, 0.3);
+  transform: translateY(-8px);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.12);
+  border-color: #cbd5e1;
 }
 
 .feature-icon {
@@ -305,16 +312,18 @@
 .feature-title {
   font-size: 1.5rem;
   font-weight: 700;
-  color: #1a1a1a;
+  color: #0f172a;
   margin: 0 0 16px 0;
   letter-spacing: 0.3px;
+  font-family: 'Times New Roman', Times, serif;
 }
 
 .feature-text {
   font-size: 1.05rem;
-  color: #666;
-  line-height: 1.7;
+  color: #64748b;
+  line-height: 1.8;
   margin: 0;
+  font-family: 'Times New Roman', Times, serif;
 }
 
 /* ============================================================================
@@ -323,13 +332,13 @@
 
 .collections-section {
   padding: 80px 0;
-  background: #f8f9ff;
+  background: #f8fafc;
 }
 
 .collections-title {
   font-size: 2.8rem;
   font-weight: 700;
-  color: #1a1a1a;
+  color: #0f172a;
   text-align: center;
   margin: 0 0 16px 0;
   letter-spacing: -0.5px;
@@ -338,7 +347,7 @@
 
 .collections-description {
   font-size: 1.1rem;
-  color: #666;
+  color: #64748b;
   text-align: center;
   margin: 0 0 60px 0;
   width: 100%;
@@ -347,6 +356,7 @@
   margin-right: auto;
   margin-bottom: 60px;
   font-family: 'Times New Roman', Times, serif;
+  line-height: 1.8;
 }
 
 .collections-grid {
@@ -364,13 +374,15 @@
   overflow: hidden;
   cursor: pointer;
   transition: all 0.3s ease;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
   background: #fff;
+  border: 1px solid #e2e8f0;
 }
 
 .collection-card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.15);
+  transform: translateY(-6px);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.15);
+  border-color: #cbd5e1;
 }
 
 .collection-image {

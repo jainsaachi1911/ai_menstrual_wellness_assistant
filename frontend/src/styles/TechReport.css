@@ -1,0 +1,538 @@
+/* Tech Report Page Styles */
+
+.tech-report-container {
+  display: flex;
+  min-height: 100vh;
+  background: linear-gradient(180deg, #ffffff 0%, #f5f7fb 100%);
+  font-family: 'Times New Roman', Times, serif;
+  padding-top: 80px;
+  gap: 40px;
+  padding: 80px 30px 40px 30px;
+}
+
+/* QR Code Section */
+.qr-section {
+  position: sticky;
+  top: 100px;
+  width: 280px;
+  height: fit-content;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.qr-box {
+  background: white;
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+  border: 1px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.qr-github-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  color: white;
+  padding: 14px 20px;
+  border-radius: 8px;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 1.1rem;
+  transition: all 0.3s ease;
+  box-shadow: 0 8px 25px rgba(59, 130, 246, 0.3);
+  font-family: 'Times New Roman', Times, serif;
+  text-align: center;
+}
+
+.qr-github-btn:hover {
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 12px 35px rgba(59, 130, 246, 0.4);
+}
+
+.qr-github-btn span {
+  font-size: 1.2rem;
+}
+
+.qr-placeholder {
+  width: 100%;
+  height: 100%;
+  aspect-ratio: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  text-align: center;
+  color: #64748b;
+  background: linear-gradient(135deg, #f0f9ff 0%, #f0f4ff 100%);
+  border-radius: 12px;
+}
+
+.qr-icon {
+  width: 120px;
+  height: 120px;
+  color: #3b82f6;
+  opacity: 0.8;
+}
+
+.qr-placeholder p {
+  font-size: 1.3rem;
+  font-weight: 600;
+  color: #0f172a;
+  margin: 0;
+}
+
+.qr-placeholder small {
+  font-size: 1.1rem;
+  color: #64748b;
+}
+
+/* Main Content */
+.report-content {
+  flex: 1;
+  max-width: 1000px;
+}
+
+/* Header */
+.report-header {
+  text-align: center;
+  margin-bottom: 50px;
+  animation: slideDown 0.6s ease-out;
+}
+
+.report-header h1 {
+  font-size: 4rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0 0 10px 0;
+  padding-top: 30px;
+  font-family: 'Times New Roman', Times, serif;
+}
+
+.report-header .subtitle {
+  font-size: 1.5rem;
+  color: #64748b;
+  margin: 0;
+  font-family: 'Times New Roman', Times, serif;
+}
+
+/* Sections */
+.section {
+  background: white;
+  border-radius: 16px;
+  padding: 40px;
+  margin-bottom: 30px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+  border: 1px solid #e2e8f0;
+  animation: fadeInUp 0.6s ease-out;
+}
+
+.section h2 {
+  font-size: 2.6rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0 0 25px 0;
+  padding-top: 20px;
+  padding-bottom: 15px;
+  font-family: 'Times New Roman', Times, serif;
+  border-bottom: 3px solid #3b82f6;
+}
+
+/* Introduction Section */
+.introduction-section p {
+  font-size: 1.5rem;
+  color: #475569;
+  line-height: 1.8;
+  margin: 0 0 20px 0;
+  font-family: 'Times New Roman', Times, serif;
+}
+
+.introduction-section p:last-of-type {
+  margin-bottom: 30px;
+}
+
+.github-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  color: white;
+  padding: 18px 36px;
+  border-radius: 8px;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 1.35rem;
+  transition: all 0.3s ease;
+  box-shadow: 0 8px 25px rgba(59, 130, 246, 0.3);
+  font-family: 'Times New Roman', Times, serif;
+}
+
+.github-btn:hover {
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  transform: translateY(-3px);
+  box-shadow: 0 12px 35px rgba(59, 130, 246, 0.4);
+}
+
+.github-btn span {
+  font-size: 1.2rem;
+}
+
+/* Technologies Section - Timeline Style */
+.tech-categories {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  position: relative;
+  padding: 20px 0;
+}
+
+.tech-categories::before {
+  content: '';
+  position: absolute;
+  left: 30px;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: linear-gradient(180deg, #3b82f6 0%, #22c55e 50%, #f59e0b 100%);
+}
+
+.tech-category {
+  border: none;
+  border-radius: 0;
+  overflow: visible;
+  padding-left: 80px;
+  position: relative;
+  margin-bottom: 30px;
+}
+
+.tech-category::before {
+  content: '';
+  position: absolute;
+  left: 18px;
+  top: 8px;
+  width: 24px;
+  height: 24px;
+  background: white;
+  border: 4px solid #3b82f6;
+  border-radius: 50%;
+  z-index: 2;
+}
+
+.category-header {
+  width: 100%;
+  background: linear-gradient(135deg, #dbeafe 0%, #e0e7ff 100%);
+  border: 2px solid #3b82f6;
+  padding: 18px 22px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #0f172a;
+  border-radius: 8px;
+}
+
+.category-header:hover {
+  background: linear-gradient(135deg, #bfdbfe 0%, #c7d2fe 100%);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
+}
+
+.category-header.expanded {
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  color: white;
+  border-color: #2563eb;
+}
+
+.category-title {
+  font-size: 1.2rem;
+  font-weight: 700;
+}
+
+.expand-icon {
+  transition: transform 0.3s ease;
+  font-size: 0.9rem;
+}
+
+.category-header.expanded .expand-icon {
+  transform: rotate(180deg);
+}
+
+.category-content {
+  padding: 20px;
+  background: white;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  animation: slideDown 0.3s ease-out;
+  border: 1px solid #e2e8f0;
+  border-top: none;
+  border-radius: 0 0 8px 8px;
+}
+
+.tech-item {
+  padding: 15px;
+  background: #f8fafc;
+  border-radius: 8px;
+  border-left: 4px solid #22c55e;
+}
+
+.tech-item h4 {
+  margin: 0 0 10px 0;
+  color: #0f172a;
+  font-size: 1.25rem;
+  font-weight: 700;
+  font-family: 'Times New Roman', Times, serif;
+}
+
+.tech-why {
+  margin-bottom: 12px;
+  color: #475569;
+  font-size: 1.3rem;
+  line-height: 1.6;
+  font-family: 'Times New Roman', Times, serif;
+}
+
+.tech-why strong {
+  color: #0f172a;
+}
+
+.tech-features {
+  color: #475569;
+  font-size: 1.25rem;
+  font-family: 'Times New Roman', Times, serif;
+}
+
+.tech-features strong {
+  color: #0f172a;
+}
+
+.tech-features ul {
+  margin: 8px 0 0 20px;
+  padding: 0;
+}
+
+.tech-features li {
+  margin: 6px 0;
+  color: #64748b;
+}
+
+/* Features Section */
+.features-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 20px;
+}
+
+.feature-card {
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  padding: 25px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  transition: all 0.3s ease;
+}
+
+.feature-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 20px rgba(59, 130, 246, 0.1);
+  border-color: #3b82f6;
+}
+
+.feature-card h3 {
+  margin: 0 0 12px 0;
+  color: #0f172a;
+  font-size: 1.35rem;
+  font-weight: 700;
+  font-family: 'Times New Roman', Times, serif;
+}
+
+.feature-card p {
+  margin: 0;
+  color: #64748b;
+  font-size: 1.3rem;
+  line-height: 1.6;
+  font-family: 'Times New Roman', Times, serif;
+}
+
+/* Models Section */
+.models-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
+}
+
+.model-card {
+  background: linear-gradient(135deg, #dbeafe 0%, #e0e7ff 100%);
+  padding: 25px;
+  border-radius: 12px;
+  border: 2px solid #3b82f6;
+  text-align: center;
+}
+
+.model-card h3 {
+  margin: 0 0 10px 0;
+  color: #0f172a;
+  font-size: 1.35rem;
+  font-weight: 700;
+  font-family: 'Times New Roman', Times, serif;
+}
+
+.model-tech {
+  margin: 0 0 12px 0;
+  color: #3b82f6;
+  font-weight: 600;
+  font-size: 1.15rem;
+  font-family: 'Times New Roman', Times, serif;
+}
+
+.model-card p:last-child {
+  margin: 0;
+  color: #475569;
+  font-size: 1.1rem;
+  line-height: 1.6;
+  font-family: 'Times New Roman', Times, serif;
+}
+
+/* Future Work Section */
+.future-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.future-list li {
+  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+  padding: 20px;
+  border-radius: 12px;
+  border: 2px solid #22c55e;
+  border-left: 5px solid #16a34a;
+  color: #475569;
+  font-size: 1.15rem;
+  line-height: 1.7;
+  font-family: 'Times New Roman', Times, serif;
+}
+
+.future-list li strong {
+  color: #0f172a;
+  font-size: 1.25rem;
+}
+
+
+
+
+/* Animations */
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Responsive Design */
+@media (max-width: 1200px) {
+  .tech-report-container {
+    flex-direction: column;
+    gap: 30px;
+  }
+
+  .qr-section {
+    position: static;
+    width: 100%;
+    max-width: 300px;
+    margin: 0 auto;
+  }
+
+  .report-header h1 {
+    font-size: 2.5rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .tech-report-container {
+    padding: 80px 20px 40px 20px;
+    gap: 20px;
+  }
+
+  .section {
+    padding: 25px;
+  }
+
+  .report-header h1 {
+    font-size: 2rem;
+  }
+
+  .report-header .subtitle {
+    font-size: 1.1rem;
+  }
+
+  .section h2 {
+    font-size: 1.8rem;
+  }
+
+  .features-grid,
+  .models-grid,
+  .future-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .architecture-flow {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .flow-arrow {
+    transform: rotate(90deg);
+  }
+}
+
+@media (max-width: 480px) {
+  .tech-report-container {
+    padding: 80px 15px 30px 15px;
+  }
+
+  .section {
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+
+  .report-header h1 {
+    font-size: 1.8rem;
+  }
+
+  .section h2 {
+    font-size: 1.5rem;
+  }
+
+  .github-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}

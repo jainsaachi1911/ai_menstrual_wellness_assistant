@@ -134,7 +134,7 @@ export default function Navbar({ isOpen: controlledIsOpen, handleToggle: control
           <Link to="/analysis" className={isActive('/analysis') ? 'nav-link active' : 'nav-link'}>
             Analysis
           </Link>
-          <Link to="/card" className={isActive('/card') ? 'nav-link active' : 'nav-link'}>
+          <Link to="/tech-report" className={isActive('/tech-report') ? 'nav-link active' : 'nav-link'}>
             Learn
           </Link>
         </div>
