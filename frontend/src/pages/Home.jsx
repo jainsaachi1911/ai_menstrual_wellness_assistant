@@ -162,10 +162,6 @@ const Home = () => {
           <div className="collection-card" onClick={() => navigate('/card3')}>
             <img src="/card-photo/Picture3.png" alt="Health Collection 3" className="collection-image" />
           </div>
-          
-          <div className="collection-card" onClick={() => navigate('/card4')}>
-            <img src="/card-photo/Picture4.png" alt="Health Collection 4" className="collection-image" />
-          </div>
         </div>
       </section>
     </div>

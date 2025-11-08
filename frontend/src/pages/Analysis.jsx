@@ -8,9 +8,11 @@ import {
   LineElement,
   Title,
   Tooltip,
-  Legend
+  Legend,
+  RadialLinearScale,
+  Filler
 } from 'chart.js';
-import { Line } from 'react-chartjs-2';
+import { Line, Radar } from 'react-chartjs-2';
 import { auth } from '../services/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { getUserProfile, saveAnalysisMetrics, getAnalyses, getCycles } from '../services/firestore';
@@ -48,7 +50,9 @@ ChartJS.register(
   LineElement,
   Title,
   Tooltip,
-  Legend
+  Legend,
+  RadialLinearScale,
+  Filler
 );
 
 // ============================================================================
@@ -83,96 +87,198 @@ const AnimatedCounter = ({ value, duration = 1.5 }) => {
 // ============================================================================
 // PDF Generation Function
 // ============================================================================
-const generatePDF = async (userProfile, analysisMetrics, modelPredictions) => {
+const generatePDF = async (userProfile, analysisMetrics, modelPredictions, cycles) => {
   try {
     const pdf = new jsPDF('p', 'mm', 'a4');
     const pageWidth = pdf.internal.pageSize.getWidth();
     const pageHeight = pdf.internal.pageSize.getHeight();
-    let yPosition = 20;
+    const margin = 20;
+    const contentWidth = pageWidth - (margin * 2);
+    let yPosition = margin;
 
-    // Title
-    pdf.setFontSize(24);
-    pdf.setFont(undefined, 'bold');
-    pdf.text('Menstrual Wellness Analysis Report', pageWidth / 2, yPosition, { align: 'center' });
-    yPosition += 15;
+    // Set pastel pink background for all pages
+    const addBackgroundColor = () => {
+      pdf.setFillColor(255, 238, 245); // Light pastel pink
+      pdf.rect(0, 0, pageWidth, pageHeight, 'F');
+    };
 
-    // Date
-    pdf.setFontSize(10);
-    pdf.setFont(undefined, 'normal');
+    // Add background to first page
+    addBackgroundColor();
+
+    // Helper function to check and add page
+    const checkPageBreak = (spaceNeeded = 25) => {
+      if (yPosition + spaceNeeded > pageHeight - margin) {
+        pdf.addPage();
+        addBackgroundColor();
+        yPosition = margin;
+      }
+    };
+
+    // Helper function to add section
+    const addSection = (title, content) => {
+      checkPageBreak(30);
+      pdf.setFont('Times New Roman', 'bold');
+      pdf.setFontSize(14);
+      pdf.text(title, margin, yPosition);
+      yPosition += 10;
+
+      pdf.setFont('Times New Roman', 'normal');
+      pdf.setFontSize(10);
+      content.forEach(line => {
+        checkPageBreak(8);
+        pdf.text(line, margin + 5, yPosition);
+        yPosition += 7;
+      });
+      yPosition += 5;
+    };
+
+    // TITLE PAGE
+    pdf.setFont('Times New Roman', 'bold');
+    pdf.setFontSize(28);
+    pdf.text('Menstrual Wellness', pageWidth / 2, yPosition, { align: 'center' });
+    yPosition += 8;
+    pdf.text('Analysis Report', pageWidth / 2, yPosition, { align: 'center' });
+    yPosition += 12;
+
+    pdf.setFont('Times New Roman', 'normal');
+    pdf.setFontSize(11);
     pdf.text(`Generated: ${new Date().toLocaleDateString()}`, pageWidth / 2, yPosition, { align: 'center' });
     yPosition += 15;
 
-    // Section 1: Overview
-    pdf.setFontSize(16);
-    pdf.setFont(undefined, 'bold');
-    pdf.text('1. Wellness Overview', 20, yPosition);
-    yPosition += 10;
+    // SECTION 0: USER INFORMATION
+    const userContent = [];
+    if (userProfile) {
+      if (userProfile.firstName) userContent.push(`First Name: ${userProfile.firstName}`);
+      if (userProfile.lastName) userContent.push(`Last Name: ${userProfile.lastName}`);
+      if (userProfile.name) userContent.push(`Full Name: ${userProfile.name}`);
+      if (userProfile.email) userContent.push(`Email: ${userProfile.email}`);
+      if (userProfile.phone) userContent.push(`Phone: ${userProfile.phone}`);
+      if (userProfile.age) userContent.push(`Age: ${userProfile.age} years`);
+      if (userProfile.bmi) userContent.push(`BMI: ${userProfile.bmi.toFixed(1)}`);
+      if (userProfile.height) userContent.push(`Height: ${userProfile.height} cm`);
+      if (userProfile.weight) userContent.push(`Weight: ${userProfile.weight} kg`);
+      if (userProfile.ageAtFirstMenstruation) userContent.push(`Age at First Menstruation: ${userProfile.ageAtFirstMenstruation} years`);
+      if (userProfile.numberPregnancies !== undefined) userContent.push(`Number of Pregnancies: ${userProfile.numberPregnancies}`);
+      if (userProfile.numberAbortions !== undefined) userContent.push(`Number of Abortions: ${userProfile.numberAbortions}`);
+      if (userProfile.currentlyBreastfeeding !== undefined) userContent.push(`Currently Breastfeeding: ${userProfile.currentlyBreastfeeding ? 'Yes' : 'No'}`);
+      if (userProfile.medicalHistory) userContent.push(`Medical History: ${userProfile.medicalHistory}`);
+      if (userProfile.medications) userContent.push(`Current Medications: ${userProfile.medications}`);
+      if (userProfile.allergies) userContent.push(`Allergies: ${userProfile.allergies}`);
+    }
+    if (userContent.length > 0) {
+      addSection('USER INFORMATION', userContent);
+    }
 
-    pdf.setFontSize(11);
-    pdf.setFont(undefined, 'normal');
+    // SECTION 1: WELLNESS OVERVIEW
+    const overviewContent = [];
     if (modelPredictions?.prwi_score) {
       const wellnessScore = (100 - (modelPredictions.prwi_score.prwi_score || 0)).toFixed(0);
-      pdf.text(`Wellness Score: ${wellnessScore}%`, 25, yPosition);
-      yPosition += 8;
-      pdf.text(`Interpretation: ${modelPredictions.prwi_score.interpretation}`, 25, yPosition, { maxWidth: pageWidth - 50 });
-      yPosition += 15;
+      overviewContent.push(`Wellness Score: ${wellnessScore}%`);
+      overviewContent.push(`Interpretation: ${modelPredictions.prwi_score.interpretation}`);
+    }
+    if (overviewContent.length > 0) {
+      addSection('1. WELLNESS OVERVIEW', overviewContent);
     }
 
-    // Section 2: Key Metrics
-    pdf.setFontSize(16);
-    pdf.setFont(undefined, 'bold');
-    pdf.text('2. Key Metrics', 20, yPosition);
-    yPosition += 10;
-
-    pdf.setFontSize(11);
-    pdf.setFont(undefined, 'normal');
+    // SECTION 2: CYCLE METRICS (All from Metrics tab)
+    const cycleContent = [];
     if (analysisMetrics) {
-      const metrics = [
-        [`Avg Cycle Length: ${(analysisMetrics?.AvgCycleLength || analysisMetrics?.avgCycleLength || 0).toFixed(0)} days`],
-        [`Regularity: ${(100 - (analysisMetrics?.IrregularCyclesPercent || analysisMetrics?.irregularCyclesPercent || 0)).toFixed(0)}%`],
-        [`Avg Bleeding Intensity: ${(analysisMetrics?.AvgBleedingIntensity || analysisMetrics?.avgBleedingIntensity || 0).toFixed(1)}/5`],
-        [`Avg Menses Length: ${(analysisMetrics?.AvgMensesLength || analysisMetrics?.avgMensesLength || 0).toFixed(1)} days`],
-        [`Avg Ovulation Day: Day ${(analysisMetrics?.AvgOvulationDay || analysisMetrics?.avgOvulationDay || 0).toFixed(1)}`],
-        [`Ovulation Variability: ${(analysisMetrics?.OvulationVariability || analysisMetrics?.ovulationVariability || 0).toFixed(1)} days`],
-      ];
+      cycleContent.push(`Average Cycle Length: ${(analysisMetrics?.AvgCycleLength || analysisMetrics?.avgCycleLength || 0).toFixed(1)} days`);
+      cycleContent.push(`Cycle Length Std Dev: ${(analysisMetrics?.StdCycleLength || analysisMetrics?.stdCycleLength || 0).toFixed(1)} days`);
+      cycleContent.push(`Irregular Cycles: ${(analysisMetrics?.IrregularCyclesPercent || analysisMetrics?.irregularCyclesPercent || 0).toFixed(1)}%`);
+      cycleContent.push(`Regularity: ${(100 - (analysisMetrics?.IrregularCyclesPercent || analysisMetrics?.irregularCyclesPercent || 0)).toFixed(0)}%`);
+      cycleContent.push(`Total Cycles Tracked: ${analysisMetrics?.TotalCycles || analysisMetrics?.totalCycles || 0}`);
+    }
+    if (cycleContent.length > 0) {
+      addSection('2. CYCLE METRICS', cycleContent);
+    }
 
-      metrics.forEach(metric => {
-        pdf.text(metric[0], 25, yPosition);
-        yPosition += 8;
-        if (yPosition > pageHeight - 20) {
-          pdf.addPage();
-          yPosition = 20;
-        }
+    // SECTION 3: BLEEDING METRICS
+    const bleedingContent = [];
+    if (analysisMetrics) {
+      bleedingContent.push(`Average Menses Length: ${(analysisMetrics?.AvgMensesLength || analysisMetrics?.avgMensesLength || 0).toFixed(1)} days`);
+      bleedingContent.push(`Average Bleeding Intensity: ${(analysisMetrics?.AvgBleedingIntensity || analysisMetrics?.avgBleedingIntensity || 0).toFixed(1)}/5`);
+      bleedingContent.push(`Unusual Bleeding: ${(analysisMetrics?.UnusualBleedingPercent || analysisMetrics?.unusualBleedingPercent || 0).toFixed(1)}%`);
+    }
+    if (bleedingContent.length > 0) {
+      addSection('3. BLEEDING METRICS', bleedingContent);
+    }
+
+    // SECTION 4: OVULATION & LUTEAL PHASE
+    const ovulationContent = [];
+    if (analysisMetrics) {
+      ovulationContent.push(`Average Ovulation Day: Day ${(analysisMetrics?.AvgOvulationDay || analysisMetrics?.avgOvulationDay || 0).toFixed(1)}`);
+      ovulationContent.push(`Ovulation Variability: ${(analysisMetrics?.OvulationVariability || analysisMetrics?.ovulationVariability || 0).toFixed(1)} days`);
+      ovulationContent.push(`Average Luteal Phase: ${(analysisMetrics?.AvgLutealPhase || analysisMetrics?.avgLutealPhase || 0).toFixed(1)} days`);
+      ovulationContent.push(`Short Luteal Phase: ${(analysisMetrics?.ShortLutealPercent || analysisMetrics?.shortLutealPercent || 0).toFixed(1)}%`);
+    }
+    if (ovulationContent.length > 0) {
+      addSection('4. OVULATION & LUTEAL PHASE', ovulationContent);
+    }
+
+    // SECTION 5: SYMPTOM ANALYSIS (From Trends tab)
+    const symptomContent = [];
+    if (cycles && cycles.length > 0) {
+      let totalCramps = 0, totalFatigue = 0, totalBackPain = 0;
+      let headacheCount = 0, bloatingCount = 0, nauseaCount = 0, acneCount = 0;
+
+      cycles.forEach((cycle) => {
+        const symptoms = cycle.symptoms || {};
+        totalCramps += symptoms.cramps || 0;
+        totalFatigue += symptoms.fatigue || 0;
+        totalBackPain += symptoms.backPain || 0;
+        if (symptoms.headache) headacheCount++;
+        if (symptoms.bloating) bloatingCount++;
+        if (symptoms.nausea) nauseaCount++;
+        if (symptoms.acne) acneCount++;
       });
+
+      const cycleCount = cycles.length;
+      symptomContent.push('Intensity-Based Symptoms:');
+      symptomContent.push(`  • Average Cramps: ${(totalCramps / cycleCount).toFixed(1)}/5`);
+      symptomContent.push(`  • Average Fatigue: ${(totalFatigue / cycleCount).toFixed(1)}/5`);
+      symptomContent.push(`  • Average Back Pain: ${(totalBackPain / cycleCount).toFixed(1)}/5`);
+      symptomContent.push('');
+      symptomContent.push('Toggle Symptoms Frequency:');
+      symptomContent.push(`  • Headache: ${((headacheCount / cycleCount) * 100).toFixed(0)}%`);
+      symptomContent.push(`  • Bloating: ${((bloatingCount / cycleCount) * 100).toFixed(0)}%`);
+      symptomContent.push(`  • Nausea: ${((nauseaCount / cycleCount) * 100).toFixed(0)}%`);
+      symptomContent.push(`  • Acne: ${((acneCount / cycleCount) * 100).toFixed(0)}%`);
+    }
+    if (symptomContent.length > 0) {
+      addSection('5. SYMPTOM ANALYSIS', symptomContent);
     }
 
-    yPosition += 5;
-
-    // Section 3: Health Assessment
-    pdf.setFontSize(16);
-    pdf.setFont(undefined, 'bold');
-    pdf.text('3. Health Assessment', 20, yPosition);
-    yPosition += 10;
-
-    pdf.setFontSize(11);
-    pdf.setFont(undefined, 'normal');
+    // SECTION 6: HEALTH ASSESSMENT
+    const assessmentContent = [];
     if (modelPredictions?.risk_assessment) {
-      pdf.text(`Risk Level: ${modelPredictions.risk_assessment.risk_level}`, 25, yPosition);
-      yPosition += 8;
+      assessmentContent.push(`Risk Level: ${modelPredictions.risk_assessment.risk_level}`);
+      const probs = modelPredictions.risk_assessment.probabilities || {};
+      assessmentContent.push(`  • Low Risk: ${((probs.low || 0) * 100).toFixed(1)}%`);
+      assessmentContent.push(`  • Medium Risk: ${((probs.medium || 0) * 100).toFixed(1)}%`);
+      assessmentContent.push(`  • High Risk: ${((probs.high || 0) * 100).toFixed(1)}%`);
+      assessmentContent.push(`Assessment: ${modelPredictions.risk_assessment.interpretation}`);
     }
-    if (modelPredictions?.clusterdev) {
-      pdf.text(`Cluster Status: Cluster ${modelPredictions.clusterdev.cluster}`, 25, yPosition);
-      yPosition += 8;
-    }
-    if (modelPredictions?.prwi_score) {
-      pdf.text(`PRWI Score: ${modelPredictions.prwi_score.prwi_score.toFixed(1)}`, 25, yPosition);
-      yPosition += 8;
+    if (assessmentContent.length > 0) {
+      addSection('6. HEALTH ASSESSMENT', assessmentContent);
     }
 
-    // Footer
+    // SECTION 7: HEALTH PATTERN
+    const patternContent = [];
+    if (modelPredictions?.clusterdev) {
+      patternContent.push(`Health Pattern Cluster: ${modelPredictions.clusterdev.cluster}`);
+      patternContent.push(`Deviation Score: ${modelPredictions.clusterdev.deviation_score?.toFixed(1)}%`);
+      patternContent.push(`Pattern Analysis: ${modelPredictions.clusterdev.interpretation}`);
+    }
+    if (patternContent.length > 0) {
+      addSection('7. HEALTH PATTERN', patternContent);
+    }
+
+    // FOOTER
+    checkPageBreak(15);
+    pdf.setFont('Times New Roman', 'italic');
     pdf.setFontSize(9);
-    pdf.setFont(undefined, 'italic');
-    pdf.text('This report is generated by AI Menstrual Wellness Assistant', pageWidth / 2, pageHeight - 10, { align: 'center' });
+    pdf.text('This comprehensive report is generated by AI Menstrual Wellness Assistant', pageWidth / 2, pageHeight - 10, { align: 'center' });
 
     // Download PDF
     pdf.save('Menstrual_Wellness_Report.pdf');
@@ -433,13 +539,6 @@ const Analysis = () => {
       >
         <div className="hero-content">
           <div className="hero-left">
-            <motion.div 
-              className="hero-icon"
-              animate={{ rotate: [0, 5, -5, 0] }}
-              transition={{ duration: 3, repeat: Infinity }}
-            >
-              <Heart size={48} />
-            </motion.div>
             <div className="hero-text">
               <h1>AI Health Dashboard</h1>
               <p>Your personal menstrual wellness companion</p>
@@ -729,6 +828,7 @@ const Analysis = () => {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.1 }}
+                    data-chart="cycle-trend"
                   >
                     <h3>Cycle Length Trend Over Time</h3>
                     <div className="chart-wrapper">
@@ -742,6 +842,7 @@ const Analysis = () => {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.2 }}
+                    data-chart="menses-duration"
                   >
                     <h3>Menses Duration Trend</h3>
                     <div className="chart-wrapper">
@@ -776,6 +877,48 @@ const Analysis = () => {
                            'Within normal range'}
                         </p>
                       </div>
+                    </div>
+                  </motion.div>
+
+                  {/* Symptom Intensity Trends */}
+                  <motion.div 
+                    className="chart-card large"
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.4 }}
+                    data-chart="symptom-intensity"
+                  >
+                    <h3>Symptom Intensity Trends</h3>
+                    <div className="chart-wrapper">
+                      <SymptomIntensityChart cycles={cycles} />
+                    </div>
+                  </motion.div>
+
+                  {/* Symptom Frequency Overview & Radar Chart */}
+                  <motion.div 
+                    className="chart-card"
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.5 }}
+                    data-chart="symptom-frequency"
+                  >
+                    <h3>Symptom Frequency</h3>
+                    <div className="chart-wrapper">
+                      <SymptomFrequencyChart cycles={cycles} />
+                    </div>
+                  </motion.div>
+
+                  {/* Symptom Severity Radar */}
+                  <motion.div 
+                    className="chart-card"
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.6 }}
+                    data-chart="symptom-radar"
+                  >
+                    <h3>Symptom Severity Profile</h3>
+                    <div className="chart-wrapper">
+                      <SymptomRadarChart cycles={cycles} />
                     </div>
                   </motion.div>
                 </div>
@@ -906,7 +1049,7 @@ const Analysis = () => {
                     style={{ marginTop: '40px', textAlign: 'center' }}
                   >
                     <button
-                      onClick={() => generatePDF(userProfile, analysisMetrics, modelPredictions)}
+                      onClick={() => generatePDF(userProfile, analysisMetrics, modelPredictions, cycles)}
                       style={{
                         padding: '14px 32px',
                         background: 'linear-gradient(135deg, #b8a3ff, #ffaac5)',
@@ -1126,5 +1269,251 @@ const MetricItem = ({ label, value, status }) => (
     </div>
   </div>
 );
+
+// ============================================================================
+// Symptom Chart Components
+// ============================================================================
+
+const SymptomIntensityChart = ({ cycles }) => {
+  if (!cycles || cycles.length === 0) return null;
+
+  // Extract intensity-based symptoms: cramps, fatigue, backPain
+  const labels = [];
+  const crampsData = [];
+  const fatigueData = [];
+  const backPainData = [];
+
+  cycles.forEach((cycle, index) => {
+    labels.push(`Cycle ${index + 1}`);
+    
+    const symptoms = cycle.symptoms || {};
+    crampsData.push(symptoms.cramps || 0);
+    fatigueData.push(symptoms.fatigue || 0);
+    backPainData.push(symptoms.backPain || 0);
+  });
+
+  const data = {
+    labels,
+    datasets: [
+      {
+        label: 'Cramps',
+        data: crampsData,
+        borderColor: '#ff6b8a',
+        backgroundColor: 'rgba(255, 107, 138, 0.1)',
+        borderWidth: 2,
+        tension: 0.4,
+        fill: true,
+        pointBackgroundColor: '#ff6b8a',
+        pointBorderColor: '#fff',
+        pointBorderWidth: 2,
+        pointRadius: 4,
+      },
+      {
+        label: 'Fatigue',
+        data: fatigueData,
+        borderColor: '#ffb899',
+        backgroundColor: 'rgba(255, 184, 153, 0.1)',
+        borderWidth: 2,
+        tension: 0.4,
+        fill: true,
+        pointBackgroundColor: '#ffb899',
+        pointBorderColor: '#fff',
+        pointBorderWidth: 2,
+        pointRadius: 4,
+      },
+      {
+        label: 'Back Pain',
+        data: backPainData,
+        borderColor: '#ff93a3',
+        backgroundColor: 'rgba(255, 147, 163, 0.1)',
+        borderWidth: 2,
+        tension: 0.4,
+        fill: true,
+        pointBackgroundColor: '#ff93a3',
+        pointBorderColor: '#fff',
+        pointBorderWidth: 2,
+        pointRadius: 4,
+      }
+    ]
+  };
+
+  const options = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: true, position: 'top' },
+    },
+    scales: {
+      y: {
+        beginAtZero: true,
+        max: 5,
+        grid: { color: 'rgba(0, 0, 0, 0.05)' },
+        title: { display: true, text: 'Intensity (0-5)' }
+      },
+      x: {
+        grid: { display: false },
+      }
+    }
+  };
+
+  return <Line data={data} options={options} />;
+};
+
+const SymptomFrequencyChart = ({ cycles }) => {
+  if (!cycles || cycles.length === 0) return null;
+
+  // Count occurrence of toggle symptoms: headache, bloating, nausea, acne
+  const symptomCounts = {
+    headache: 0,
+    bloating: 0,
+    nausea: 0,
+    acne: 0
+  };
+
+  cycles.forEach((cycle) => {
+    const symptoms = cycle.symptoms || {};
+    if (symptoms.headache) symptomCounts.headache++;
+    if (symptoms.bloating) symptomCounts.bloating++;
+    if (symptoms.nausea) symptomCounts.nausea++;
+    if (symptoms.acne) symptomCounts.acne++;
+  });
+
+  const totalCycles = cycles.length;
+  const frequencyPercentages = {
+    headache: (symptomCounts.headache / totalCycles) * 100,
+    bloating: (symptomCounts.bloating / totalCycles) * 100,
+    nausea: (symptomCounts.nausea / totalCycles) * 100,
+    acne: (symptomCounts.acne / totalCycles) * 100
+  };
+
+  const data = {
+    labels: ['Headache', 'Bloating', 'Nausea', 'Acne'],
+    datasets: [{
+      label: 'Frequency (%)',
+      data: [frequencyPercentages.headache, frequencyPercentages.bloating, frequencyPercentages.nausea, frequencyPercentages.acne],
+      backgroundColor: [
+        'rgba(184, 163, 255, 0.6)',
+        'rgba(153, 213, 255, 0.6)',
+        'rgba(157, 230, 186, 0.6)',
+        'rgba(255, 184, 153, 0.6)'
+      ],
+      borderColor: [
+        '#b8a3ff',
+        '#99d5ff',
+        '#9de6ba',
+        '#ffb899'
+      ],
+      borderWidth: 2,
+    }]
+  };
+
+  const options = {
+    responsive: true,
+    maintainAspectRatio: false,
+    indexAxis: 'y',
+    plugins: {
+      legend: { display: false },
+    },
+    scales: {
+      x: {
+        beginAtZero: true,
+        max: 100,
+        grid: { color: 'rgba(0, 0, 0, 0.05)' },
+      },
+      y: {
+        grid: { display: false },
+      }
+    }
+  };
+
+  return <Line data={data} options={options} />;
+};
+
+const SymptomRadarChart = ({ cycles }) => {
+  if (!cycles || cycles.length === 0) return null;
+
+  // Calculate average intensity for all symptoms
+  let totalCramps = 0;
+  let totalFatigue = 0;
+  let totalBackPain = 0;
+  let totalHeadache = 0;
+  let totalBloating = 0;
+  let totalNausea = 0;
+  let totalAcne = 0;
+  let headacheCount = 0;
+  let bloatingCount = 0;
+  let nauseaCount = 0;
+  let acneCount = 0;
+
+  cycles.forEach((cycle) => {
+    const symptoms = cycle.symptoms || {};
+    
+    // Intensity symptoms
+    totalCramps += symptoms.cramps || 0;
+    totalFatigue += symptoms.fatigue || 0;
+    totalBackPain += symptoms.backPain || 0;
+    
+    // Toggle symptoms (count as 5 if present, 0 if not)
+    if (symptoms.headache) {
+      totalHeadache += 5;
+      headacheCount++;
+    }
+    if (symptoms.bloating) {
+      totalBloating += 5;
+      bloatingCount++;
+    }
+    if (symptoms.nausea) {
+      totalNausea += 5;
+      nauseaCount++;
+    }
+    if (symptoms.acne) {
+      totalAcne += 5;
+      acneCount++;
+    }
+  });
+
+  const cycleCount = cycles.length;
+  const avgCramps = (totalCramps / cycleCount);
+  const avgFatigue = (totalFatigue / cycleCount);
+  const avgBackPain = (totalBackPain / cycleCount);
+  const avgHeadache = (totalHeadache / cycleCount);
+  const avgBloating = (totalBloating / cycleCount);
+  const avgNausea = (totalNausea / cycleCount);
+  const avgAcne = (totalAcne / cycleCount);
+
+  const data = {
+    labels: ['Cramps', 'Fatigue', 'Back Pain', 'Headache', 'Bloating', 'Nausea', 'Acne'],
+    datasets: [{
+      label: 'Average Severity',
+      data: [avgCramps, avgFatigue, avgBackPain, avgHeadache, avgBloating, avgNausea, avgAcne],
+      borderColor: '#b8a3ff',
+      backgroundColor: 'rgba(184, 163, 255, 0.25)',
+      borderWidth: 2.5,
+      pointBackgroundColor: '#b8a3ff',
+      pointBorderColor: '#fff',
+      pointBorderWidth: 2,
+      pointRadius: 5,
+      pointHoverRadius: 7,
+    }]
+  };
+
+  const options = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: true, position: 'top' },
+    },
+    scales: {
+      r: {
+        beginAtZero: true,
+        max: 5,
+        grid: { color: 'rgba(0, 0, 0, 0.1)' },
+        ticks: { stepSize: 1 }
+      }
+    }
+  };
+
+  return <Radar data={data} options={options} />;
+};
 
 export default Analysis;

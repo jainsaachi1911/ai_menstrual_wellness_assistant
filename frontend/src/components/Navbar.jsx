@@ -135,8 +135,18 @@ export default function Navbar({ isOpen: controlledIsOpen, handleToggle: control
           <Link to="/ai-chat" className={isActive('/ai-chat') ? 'nav-link active' : 'nav-link'}>
             AI Chat
           </Link>
-          <Link to="/user" className={isActive('/user') ? 'nav-link active' : 'nav-link'}>
-            Profile
+          <Link to="/user" className={`profile-link ${isActive('/user') ? 'active' : ''}`}>
+            <div className="profile-photo-wrapper">
+              {userProfile.profilePicture ? (
+                <img 
+                  src={userProfile.profilePicture} 
+                  alt="Profile" 
+                  className="navbar-profile-photo"
+                />
+              ) : (
+                <UserCircle size={32} className="default-profile-icon" />
+              )}
+            </div>
           </Link>
           <button className="logout-btn-top" onClick={handleLogout} title="Logout">
             <LogOut size={18} />

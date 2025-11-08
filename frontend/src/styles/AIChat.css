@@ -22,7 +22,7 @@
   background: rgba(255, 255, 255, 0.25);
   backdrop-filter: blur(15px);
   -webkit-backdrop-filter: blur(15px);
-  color: #4a5568;
+  color: #2d3748;
   padding: 1.5rem 2rem;
   display: flex;
   justify-content: space-between;
@@ -33,17 +33,21 @@
 
 .chat-header h3 {
   margin: 0;
-  font-size: 2rem; /* Increased from 1.2rem */
-  font-weight: 600;
+  font-size: 2rem;
+  font-weight: 700;
+  color: #1a202c;
 }
 
 .chat-status {
-  margin: 0.3rem 0 0 0;
-  font-size: 1.5rem; /* Increased from 0.85rem */
+  margin: 0rem 20 0 0;
+  font-size: 1.5rem;
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  opacity: 0.95;
+  justify-content: left;
+  gap: 0.6rem;
+  opacity: 1;
+  font-weight: 500;
+  color: #2d3748;
 }
 
 .status-dot {
@@ -192,6 +196,7 @@
   font-size: 0.9rem; /* Increased from 0.75rem */
   color: #718096;
   padding: 0 0.5rem;
+  font-weight: 500;
 }
 
 /* Typing Indicator */
@@ -329,6 +334,7 @@
   color: #92400e;
   font-size: 0.9rem; /* Increased from 0.8rem */
   line-height: 1.4;
+  font-weight: 600;
 }
 
 /* Responsive Design */

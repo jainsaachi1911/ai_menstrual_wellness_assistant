@@ -100,6 +100,12 @@ const AIChat = () => {
 
   return (
     <div className="ai-chat-page">
+      <div className="chat-disclaimer">
+        <small>
+          💡 This is an AI assistant. For medical concerns, please consult a healthcare professional.
+        </small>
+      </div>
+
       <div className="chat-header">
         <h3>Menstrual Health Assistant</h3>
         <p className="chat-status">
@@ -180,12 +186,6 @@ const AIChat = () => {
           {isLoading ? '⏳' : '➤'}
         </button>
       </form>
-
-      <div className="chat-disclaimer">
-        <small>
-          💡 This is an AI assistant. For medical concerns, please consult a healthcare professional.
-        </small>
-      </div>
     </div>
   );
 };

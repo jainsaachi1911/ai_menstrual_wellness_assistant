@@ -827,9 +827,9 @@ const AnalysisForm = () => {
       )}
 
       {/* Welcoming Header */}
-      <div className="calendar-header">
+      {/* <div className="calendar-header">
         <h2>Your Wellness Journey</h2>
-      </div>
+      </div> */}
 
       <div className="period-tracker">
 
