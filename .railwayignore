@@ -1,0 +1,10 @@
+node_modules/
+frontend/
+ai-train/
+dataset/
+.git/
+.DS_Store
+*.md
+.env
+.env.local
+firebase-debug.log

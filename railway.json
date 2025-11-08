@@ -1,0 +1,8 @@
+{
+  "build": {
+    "builder": "dockerfile"
+  },
+  "deploy": {
+    "startCommand": "cd backend && gunicorn --bind 0.0.0.0:${PORT:-8080} --workers 4 --timeout 0 app:app"
+  }
+}
