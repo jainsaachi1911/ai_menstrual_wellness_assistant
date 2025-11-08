@@ -6,3 +6,5 @@ scikit-learn==1.4.0
 xgboost==2.0.3
 catboost==1.2.2
 pyarrow>=10.0.0
+gunicorn==21.2.0
+python-dotenv==1.0.0
