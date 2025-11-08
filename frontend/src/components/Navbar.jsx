@@ -92,6 +92,20 @@ export default function Navbar({ isOpen: controlledIsOpen, handleToggle: control
     return () => unsub();
   }, []);
 
+  // Listen for profile updates from User page
+  useEffect(() => {
+    const handleProfileUpdate = (e) => {
+      setUserProfile({
+        firstName: e.detail.firstName || '',
+        lastName: e.detail.lastName || '',
+        profilePicture: e.detail.profilePicture || null
+      });
+    };
+    
+    window.addEventListener('profile-updated', handleProfileUpdate);
+    return () => window.removeEventListener('profile-updated', handleProfileUpdate);
+  }, []);
+
   const handleLogout = async () => {
     try {
       await signOut(auth);
@@ -119,6 +133,9 @@ export default function Navbar({ isOpen: controlledIsOpen, handleToggle: control
           </Link>
           <Link to="/analysis" className={isActive('/analysis') ? 'nav-link active' : 'nav-link'}>
             Analysis
+          </Link>
+          <Link to="/card" className={isActive('/card') ? 'nav-link active' : 'nav-link'}>
+            Learn
           </Link>
         </div>
 

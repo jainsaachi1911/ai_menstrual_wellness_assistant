@@ -8,6 +8,9 @@ import User from './pages/User';
 import Analysis from './pages/Analysis';
 import Calendar from './pages/Calendar';
 import AIChat from './pages/AIChat';
+import Card from './pages/Card';
+import Card2 from './pages/Card2';
+import Card3 from './pages/Card3';
 import './App.css';
 
 function App() {
@@ -34,6 +37,9 @@ function App() {
           <Route path="/calendar" element={<Calendar />} />
           <Route path="/analysis" element={<Analysis />} />
           <Route path="/ai-chat" element={<AIChat />} />
+          <Route path="/card1" element={<Card />} />
+          <Route path="/card2" element={<Card2 />} />
+          <Route path="/card3" element={<Card3 />} />
           <Route path="/" element={<Navigate to="/signup" />} />
         </Routes>
       </div>

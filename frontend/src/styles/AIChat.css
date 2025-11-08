@@ -35,7 +35,7 @@
   margin: 0;
   font-size: 2rem;
   font-weight: 700;
-  color: #1a202c;
+  color: #1a1a1a;
 }
 
 .chat-status {
@@ -47,7 +47,7 @@
   gap: 0.6rem;
   opacity: 1;
   font-weight: 500;
-  color: #2d3748;
+  color: #1a1a1a;
 }
 
 .status-dot {
@@ -173,7 +173,8 @@
   line-height: 1.7;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
   word-wrap: break-word;
-  font-size: 1.2rem; /* Increased from 1.05rem */
+  font-size: 1rem;
+  color: #333333;
   border: 1px solid rgba(255, 255, 255, 0.5);
 }
 
@@ -193,8 +194,8 @@
 }
 
 .message-time {
-  font-size: 0.9rem; /* Increased from 0.75rem */
-  color: #718096;
+  font-size: 0.9rem;
+  color: #555555;
   padding: 0 0.5rem;
   font-weight: 500;
 }

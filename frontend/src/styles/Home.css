@@ -116,8 +116,8 @@
 }
 
 .hero-description {
-  font-size: 1.1rem;
-  color: #666;
+  font-size: 1.15rem;
+  color: #333333;
   line-height: 1.6;
   margin: 0 0 20px 0;
   width: 100%;
@@ -205,9 +205,9 @@
 }
 
 .brand-item span {
-  font-size: 1rem;
-  color: #666;
-  font-weight: 500;
+  font-size: 1.2rem;
+  color: #000000;
+  font-weight: 600;
   font-family: 'Times New Roman', Times, serif;
   white-space: nowrap;
 }
@@ -419,7 +419,7 @@
   }
 
   .brand-item span {
-    font-size: 0.9rem;
+    font-size: 1rem;
   }
 
   .features-section {
@@ -479,7 +479,7 @@
   }
 
   .brand-item span {
-    font-size: 0.85rem;
+    font-size: 0.95rem;
   }
 
   .brand-dot {

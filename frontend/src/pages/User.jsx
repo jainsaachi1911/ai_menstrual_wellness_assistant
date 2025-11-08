@@ -144,6 +144,15 @@ const User = () => {
         );
         setUserData(editData);
         setIsEditMode(false);
+        
+        // Dispatch event to notify Navbar of profile picture change
+        window.dispatchEvent(new CustomEvent('profile-updated', {
+          detail: {
+            profilePicture: editData.profilePicture,
+            firstName: editData.firstName,
+            lastName: editData.lastName
+          }
+        }));
       }
     } catch (error) {
       alert('Failed to save changes. Please try again.');

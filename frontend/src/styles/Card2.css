@@ -1,0 +1,311 @@
+/* Card2 Page Styles - Irregular Periods - Matching Website Design */
+
+:root {
+  --pastel-purple: #b8a3ff;
+  --pastel-peach: #ffb899;
+  --pastel-pink: #ffaac5;
+  --pastel-green: #9de6ba;
+  --pastel-blue: #99d5ff;
+  --pastel-red: #ffaaaa;
+  --white: #ffffff;
+  --gray-light: #f5f5f5;
+  --gray-medium: #d4d4d4;
+  --gray-dark: #555555;
+  --text-primary: #1a1a1a;
+  --text-secondary: #333333;
+}
+
+.card2-container {
+  background: linear-gradient(135deg, #f8f9ff 0%, #fff5f8 50%, #f8f9ff 100%);
+  font-family: 'Times New Roman', Times, serif;
+}
+
+/* Color Variants for Card2 */
+.card-orange {
+  border-color: #fed7aa;
+  background: linear-gradient(135deg, #fffbf0 0%, #fef3c7 100%);
+}
+
+.card-orange .card-icon-wrapper {
+  background: linear-gradient(135deg, #fed7aa 0%, #fbbf24 100%);
+  color: #b45309;
+}
+
+.card-red-dark {
+  border-color: #fecaca;
+  background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+}
+
+.card-red-dark .card-icon-wrapper {
+  background: linear-gradient(135deg, #fca5a5 0%, #f87171 100%);
+  color: #7f1d1d;
+}
+
+.card-pink-dark {
+  border-color: #fbcfe8;
+  background: linear-gradient(135deg, #fdf2f8 0%, #fce7f3 100%);
+}
+
+.card-pink-dark .card-icon-wrapper {
+  background: linear-gradient(135deg, #f472b6 0%, #ec4899 100%);
+  color: #831843;
+}
+
+.card-blue-dark {
+  border-color: #bfdbfe;
+  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+}
+
+.card-blue-dark .card-icon-wrapper {
+  background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
+  color: #082f49;
+}
+
+.card-purple-dark {
+  border-color: #ddd6fe;
+  background: linear-gradient(135deg, #faf5ff 0%, #ede9fe 100%);
+}
+
+.card-purple-dark .card-icon-wrapper {
+  background: linear-gradient(135deg, #a78bfa 0%, #8b5cf6 100%);
+  color: #4c1d95;
+}
+
+.card-teal-dark {
+  border-color: #99f6e4;
+  background: linear-gradient(135deg, #f0fdfa 0%, #ccfbf1 100%);
+}
+
+.card-teal-dark .card-icon-wrapper {
+  background: linear-gradient(135deg, #5eead4 0%, #2dd4bf 100%);
+  color: #134e4a;
+}
+
+/* Examples Container */
+.examples-container {
+  margin-top: 24px;
+}
+
+.examples-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #2d1b4e;
+  margin: 0 0 16px 0;
+}
+
+.examples-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.example-item {
+  background: linear-gradient(135deg, rgba(217, 70, 166, 0.05) 0%, rgba(124, 58, 237, 0.05) 100%);
+  border-radius: 12px;
+  padding: 14px;
+  border-left: 4px solid #d946a6;
+  transition: all 0.3s ease;
+}
+
+.example-item:hover {
+  background: linear-gradient(135deg, rgba(217, 70, 166, 0.1) 0%, rgba(124, 58, 237, 0.1) 100%);
+  transform: translateX(4px);
+}
+
+.example-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.example-number {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #d946a6 0%, #7c3aed 100%);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 0.85rem;
+  flex-shrink: 0;
+}
+
+.example-name {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #2d1b4e;
+  margin: 0;
+}
+
+.example-description {
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+  line-height: 1.5;
+  margin: 0;
+  text-align: justify;
+}
+
+/* Conditions Container */
+.conditions-container {
+  margin-top: 24px;
+}
+
+.conditions-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #2d1b4e;
+  margin: 0 0 16px 0;
+}
+
+.conditions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.condition-item {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.05) 0%, rgba(249, 115, 22, 0.05) 100%);
+  border-radius: 12px;
+  padding: 16px;
+  border-left: 4px solid #ef4444;
+  transition: all 0.3s ease;
+}
+
+.condition-item:hover {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.1) 0%, rgba(249, 115, 22, 0.1) 100%);
+  transform: translateX(4px);
+}
+
+.condition-header {
+  margin-bottom: 8px;
+}
+
+.condition-name {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #7f1d1d;
+  margin: 0;
+}
+
+.condition-description {
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+  line-height: 1.6;
+  margin: 0;
+  text-align: justify;
+}
+
+/* Tips Container */
+.tips-container {
+  margin-top: 24px;
+}
+
+.tips-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #2d1b4e;
+  margin: 0 0 16px 0;
+}
+
+.tips-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 14px;
+}
+
+.tip-item {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.05) 0%, rgba(139, 92, 246, 0.05) 100%);
+  border-radius: 12px;
+  padding: 14px;
+  border: 2px solid rgba(59, 130, 246, 0.1);
+  transition: all 0.3s ease;
+}
+
+.tip-item:hover {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);
+  transform: translateY(-4px);
+  box-shadow: 0 8px 16px rgba(59, 130, 246, 0.1);
+}
+
+.tip-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.tip-number {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 0.85rem;
+  flex-shrink: 0;
+}
+
+.tip-name {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #082f49;
+  margin: 0;
+}
+
+.tip-description {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .examples-list,
+  .conditions-list {
+    gap: 10px;
+  }
+
+  .example-item,
+  .condition-item,
+  .tip-item {
+    padding: 12px;
+  }
+
+  .tips-list {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .example-header,
+  .tip-header {
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .example-number,
+  .tip-number {
+    width: 24px;
+    height: 24px;
+    font-size: 0.75rem;
+  }
+
+  .example-name,
+  .tip-name,
+  .condition-name {
+    font-size: 0.9rem;
+  }
+
+  .example-description,
+  .condition-description,
+  .tip-description {
+    font-size: 0.8rem;
+  }
+}
